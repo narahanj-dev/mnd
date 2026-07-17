@@ -26,8 +26,8 @@ export function EventFormModal({ date, events, onClose, onSaved }: { date: strin
       description: form.get("description"), publicNote: form.get("publicNote"), adminNote: form.get("adminNote"),
     };
     try {
-      await parseJsonResponse(await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }));
-      alert("일정이 등록되었습니다. 관리자의 승인 후 공동 달력에 표시됩니다.");
+      const result = await parseJsonResponse<{ message?: string }>(await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }));
+      alert(result.message ?? "일정 추가 요청이 접수되었습니다. 관리자의 승인이 완료될 때까지 기다려 주세요.");
       onSaved(); onClose();
     } catch (err) { setError(err instanceof Error ? err.message : "등록에 실패했습니다."); }
     finally { setLoading(false); }

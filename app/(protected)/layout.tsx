@@ -11,12 +11,16 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single<Profile>();
   if (!profile || profile.account_status !== "active") redirect("/login");
 
-  const [{ count: unreadCount }, { count: pendingCount }] = await Promise.all([
+  const [{ count: unreadCount }, { count: pendingEventCount }, { count: pendingChangeCount }] = await Promise.all([
     supabase.from("messages").select("id", { count: "exact", head: true }).eq("recipient_id", user.id).eq("is_read", false),
     profile.role === "admin"
       ? supabase.from("calendar_events").select("id", { count: "exact", head: true }).eq("status", "pending")
       : Promise.resolve({ count: 0 }),
+    profile.role === "admin"
+      ? supabase.from("event_change_requests").select("id", { count: "exact", head: true }).eq("status", "pending")
+      : Promise.resolve({ count: 0 }),
   ]);
+  const pendingCount = (pendingEventCount ?? 0) + (pendingChangeCount ?? 0);
 
   return (
     <div className="min-h-screen">

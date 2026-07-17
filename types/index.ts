@@ -7,6 +7,8 @@ export type EventStatus =
   | "rejected"
   | "cancellation_requested"
   | "cancelled";
+export type RequestStatus = "pending" | "approved" | "rejected";
+export type EventChangeType = "update" | "delete";
 
 export interface Profile {
   id: string;
@@ -16,6 +18,7 @@ export interface Profile {
   role: UserRole;
   account_status: AccountStatus;
   must_change_password: boolean;
+  birth_date: string | null;
   created_at: string;
   updated_at: string;
   last_login_at: string | null;
@@ -40,7 +43,33 @@ export interface CalendarEvent {
   approved_at: string | null;
   created_at: string;
   updated_at: string;
+  is_system_generated?: boolean;
   profile?: Pick<Profile, "display_name" | "department">;
+}
+
+export interface EventChangeRequest {
+  id: string;
+  event_id: string;
+  requester_id: string;
+  request_type: EventChangeType;
+  reason: string;
+  proposed_event_type: EventType | null;
+  proposed_title: string | null;
+  proposed_start_date: string | null;
+  proposed_end_date: string | null;
+  proposed_all_day: boolean | null;
+  proposed_start_time: string | null;
+  proposed_end_time: string | null;
+  proposed_description: string | null;
+  proposed_public_note: string | null;
+  proposed_admin_note: string | null;
+  status: RequestStatus;
+  rejection_reason: string | null;
+  processed_by: string | null;
+  processed_at: string | null;
+  created_at: string;
+  event?: CalendarEvent;
+  requester?: Pick<Profile, "display_name" | "department">;
 }
 
 export interface Message {

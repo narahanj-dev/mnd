@@ -30,6 +30,7 @@ export function SignupRequestForm() {
       <h1 className="text-2xl font-black">회원가입 신청</h1>
       <p className="text-sm text-slate-500">신청 후 관리자가 실제 계정과 임시 비밀번호를 발급합니다.</p>
       <label className="block text-sm font-bold">이름<input name="name" className="input mt-1" required maxLength={50} /></label>
+      <label className="block text-sm font-bold">생년월일<input name="birthDate" type="date" className="input mt-1" required max={new Date().toISOString().slice(0, 10)} /></label>
       <label className="block text-sm font-bold">소속 부서<input name="department" className="input mt-1" required maxLength={80} /></label>
       <label className="block text-sm font-bold">내부 연락처 또는 이메일<input name="contact" className="input mt-1" required maxLength={100} /></label>
       <label className="block text-sm font-bold">희망 아이디<input name="requestedLoginId" className="input mt-1" required minLength={4} maxLength={30} /></label>

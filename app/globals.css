@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f4f7fb;
+  --foreground: #172033;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid rgba(37, 99, 235, .35); outline-offset: 2px; }
+
+.card {
+  border: 1px solid #dbe3ef;
+  border-radius: 1rem;
+  background: white;
+  box-shadow: 0 12px 35px rgba(30, 41, 59, .06);
+}
+.input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: .75rem;
+  background: white;
+  padding: .7rem .85rem;
+  color: #172033;
+}
+.input:focus { border-color: #2563eb; outline: 3px solid rgba(37, 99, 235, .12); }
+.btn-primary {
+  border-radius: .75rem;
+  background: #1d4ed8;
+  color: white;
+  font-weight: 700;
+  padding: .7rem 1rem;
+}
+.btn-primary:hover { background: #1e40af; }
+.btn-secondary {
+  border: 1px solid #cbd5e1;
+  border-radius: .75rem;
+  background: white;
+  color: #334155;
+  font-weight: 700;
+  padding: .65rem 1rem;
+}
+.btn-danger {
+  border-radius: .75rem;
+  background: #b91c1c;
+  color: white;
+  font-weight: 700;
+  padding: .65rem 1rem;
+}

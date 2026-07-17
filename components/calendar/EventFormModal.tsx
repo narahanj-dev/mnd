@@ -39,9 +39,15 @@ export function EventFormModal({ date, events, onClose, onSaved }: { date: strin
       <section className="card max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5" role="dialog" aria-modal="true">
         <div className="flex items-start justify-between"><div><h2 className="text-xl font-black">{date} 일정</h2><p className="text-sm text-slate-500">해당 날짜의 일정 확인 및 추가</p></div><button onClick={onClose} className="rounded-lg p-2 hover:bg-slate-100" aria-label="닫기"><X /></button></div>
         {events.length > 0 && (
-          <div className="mt-5 space-y-2">
-            {events.map((item) => <div key={item.id} className="rounded-xl border border-slate-200 p-3"><div className="font-bold">[{EVENT_TYPE_LABELS[item.event_type]}] {item.profile?.display_name} · {item.title}</div><div className="mt-1 text-sm text-slate-500">{item.all_day ? "종일" : `${item.start_time?.slice(0,5)}~${item.end_time?.slice(0,5)}`}</div></div>)}
-            {!showForm && <button className="btn-primary mt-2" onClick={() => setShowForm(true)}>+ 일정 추가</button>}
+          <div className="mt-5">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-black">등록 일정 {events.length}건</h3>
+              <span className="text-xs text-slate-500">목록 안에서 스크롤할 수 있습니다.</span>
+            </div>
+            <div className="mt-2 max-h-[45vh] space-y-2 overflow-y-auto overscroll-contain pr-2">
+              {events.map((item) => <div key={item.id} className="rounded-xl border border-slate-200 p-3"><div className="font-bold">[{EVENT_TYPE_LABELS[item.event_type]}] {item.profile?.display_name} · {item.title}</div><div className="mt-1 text-sm text-slate-500">{item.all_day ? "종일" : `${item.start_time?.slice(0,5)}~${item.end_time?.slice(0,5)}`}</div></div>)}
+            </div>
+            {!showForm && <button className="btn-primary mt-3" onClick={() => setShowForm(true)}>+ 일정 추가</button>}
           </div>
         )}
         {showForm && (

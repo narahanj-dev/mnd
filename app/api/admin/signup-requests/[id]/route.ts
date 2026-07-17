@@ -63,6 +63,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     });
     await admin.from("signup_requests").update({
       status: "approved",
+      approved_user_id: data.user.id,
       processed_by: user.id,
       processed_at: new Date().toISOString(),
     }).eq("id", id);

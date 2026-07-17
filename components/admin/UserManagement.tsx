@@ -1,18 +1,26 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { DEPARTMENTS } from "@/lib/constants";
+import {
+  DEPARTMENTS,
+  USER_ROLE_LABELS,
+  USER_ROLE_OPTIONS,
+} from "@/lib/constants";
 import { parseJsonResponse } from "@/lib/utils";
-import type { Profile } from "@/types";
+import type { Profile, UserRole } from "@/types";
 
 type UsersResponse = {
   users: Profile[];
   currentUserId: string;
+  currentUserRole: UserRole;
+  currentUserDepartment: string;
 };
 
 export function UserManagement() {
   const [users, setUsers] = useState<Profile[]>([]);
   const [currentUserId, setCurrentUserId] = useState("");
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole>("user");
+  const [currentUserDepartment, setCurrentUserDepartment] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<Profile | null>(null);
   const [deleteUser, setDeleteUser] = useState<Profile | null>(null);
@@ -21,6 +29,8 @@ export function UserManagement() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
+  const isFullAdmin = currentUserRole === "admin";
+
   const load = useCallback(async () => {
     try {
       const data = await parseJsonResponse<UsersResponse>(
@@ -28,6 +38,8 @@ export function UserManagement() {
       );
       setUsers(data.users);
       setCurrentUserId(data.currentUserId);
+      setCurrentUserRole(data.currentUserRole);
+      setCurrentUserDepartment(data.currentUserDepartment);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "사용자 목록을 불러오지 못했습니다.");
     }
@@ -36,6 +48,15 @@ export function UserManagement() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  function canManage(target: Profile) {
+    if (currentUserRole === "admin") return true;
+    return (
+      currentUserRole === "department_admin" &&
+      target.department === currentUserDepartment &&
+      target.role !== "admin"
+    );
+  }
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -65,6 +86,7 @@ export function UserManagement() {
     setMessage("");
     try {
       const form = new FormData(event.currentTarget);
+      const nextRole = String(form.get("role")) as UserRole;
       await parseJsonResponse(
         await fetch(`/api/admin/users/${editUser.id}`, {
           method: "PATCH",
@@ -73,11 +95,19 @@ export function UserManagement() {
             action: "updateIdentity",
             loginId: form.get("loginId"),
             department: form.get("department"),
+            role: nextRole,
           }),
         }),
       );
+      const changedCurrentUser = editUser.id === currentUserId;
       setEditUser(null);
-      setMessage("아이디와 부서를 변경했습니다. 달력과 관련 화면에도 즉시 반영됩니다.");
+      setMessage("아이디, 부서와 권한을 변경했습니다. 관련 화면에도 즉시 반영됩니다.");
+
+      if (changedCurrentUser && nextRole === "user") {
+        window.location.assign("/calendar");
+        return;
+      }
+
       await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "사용자 정보 수정에 실패했습니다.");
@@ -162,12 +192,17 @@ export function UserManagement() {
         <div>
           <h1 className="text-2xl font-black">사용자 관리</h1>
           <p className="mt-1 text-sm text-slate-500">
-            삭제하면 계정과 해당 사용자의 일정·쪽지·요청 기록이 모두 영구 삭제됩니다.
+            {isFullAdmin
+              ? "관리자는 모든 사용자 정보를 관리할 수 있습니다."
+              : `${currentUserDepartment} 소속 사용자만 관리할 수 있습니다.`}
+            {" "}삭제하면 계정과 일정·쪽지·요청 기록이 모두 영구 삭제됩니다.
           </p>
         </div>
-        <button className="btn-primary" onClick={() => setCreateOpen(true)}>
-          + 사용자 생성
-        </button>
+        {isFullAdmin && (
+          <button className="btn-primary" onClick={() => setCreateOpen(true)}>
+            + 사용자 생성
+          </button>
+        )}
       </div>
 
       {message && (
@@ -193,6 +228,11 @@ export function UserManagement() {
             {users.map((user) => {
               const busy = busyId === user.id;
               const isCurrentUser = currentUserId === user.id;
+              const manageable = canManage(user);
+              const disabledTitle = !manageable
+                ? "관리자 계정은 전체 관리자만 관리할 수 있습니다."
+                : undefined;
+
               return (
                 <tr key={user.id}>
                   <td className="p-3 font-bold">
@@ -205,7 +245,7 @@ export function UserManagement() {
                   </td>
                   <td className="p-3">{user.login_id}</td>
                   <td className="p-3">{user.department}</td>
-                  <td className="p-3">{user.role === "admin" ? "관리자" : "일반 사용자"}</td>
+                  <td className="p-3">{USER_ROLE_LABELS[user.role]}</td>
                   <td className="p-3">{user.account_status === "active" ? "활성" : "비활성"}</td>
                   <td className="p-3">
                     {user.last_login_at
@@ -215,26 +255,28 @@ export function UserManagement() {
                   <td className="p-3">
                     <div className="flex flex-wrap gap-2">
                       <button
-                        className="btn-secondary text-xs"
-                        disabled={busy}
+                        className="btn-secondary text-xs disabled:cursor-not-allowed disabled:opacity-40"
+                        disabled={busy || !manageable}
+                        title={disabledTitle}
                         onClick={() => setEditUser(user)}
                       >
-                        아이디·부서 변경
+                        아이디·부서·권한 변경
                       </button>
                       <button
-                        className="btn-secondary text-xs"
-                        disabled={busy}
+                        className="btn-secondary text-xs disabled:cursor-not-allowed disabled:opacity-40"
+                        disabled={busy || !manageable}
+                        title={disabledTitle}
                         onClick={() => void resetPassword(user)}
                       >
                         비밀번호 초기화
                       </button>
                       <button
                         className="btn-danger text-xs disabled:cursor-not-allowed disabled:opacity-40"
-                        disabled={busy || isCurrentUser}
+                        disabled={busy || isCurrentUser || !manageable}
                         title={
                           isCurrentUser
-                            ? "현재 로그인한 관리자 계정은 삭제할 수 없습니다."
-                            : undefined
+                            ? "현재 로그인한 계정은 삭제할 수 없습니다."
+                            : disabledTitle
                         }
                         onClick={() => openDeleteModal(user)}
                       >
@@ -249,7 +291,7 @@ export function UserManagement() {
         </table>
       </div>
 
-      {createOpen && (
+      {createOpen && isFullAdmin && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
           onMouseDown={(event) => event.target === event.currentTarget && setCreateOpen(false)}
@@ -275,9 +317,12 @@ export function UserManagement() {
                 </option>
               ))}
             </select>
-            <select name="role" className="input">
-              <option value="user">일반 사용자</option>
-              <option value="admin">관리자</option>
+            <select name="role" className="input" defaultValue="user">
+              {USER_ROLE_OPTIONS.map((role) => (
+                <option key={role.value} value={role.value}>
+                  {role.label}
+                </option>
+              ))}
             </select>
             <div className="flex justify-end gap-2">
               <button type="button" className="btn-secondary" onClick={() => setCreateOpen(false)}>
@@ -296,7 +341,7 @@ export function UserManagement() {
         >
           <form onSubmit={updateIdentity} className="card w-full max-w-lg space-y-5 p-6">
             <div>
-              <h2 className="text-xl font-black">아이디·부서 변경</h2>
+              <h2 className="text-xl font-black">아이디·부서·권한 변경</h2>
               <p className="mt-1 text-sm text-slate-500">
                 {editUser.display_name}님의 정보가 달력 일정과 모든 관련 화면에 함께 반영됩니다.
               </p>
@@ -317,6 +362,7 @@ export function UserManagement() {
                 name="department"
                 className="input mt-1"
                 defaultValue={editUser.department}
+                disabled={currentUserRole === "department_admin" && editUser.id === currentUserId}
                 required
               >
                 {DEPARTMENTS.map((department) => (
@@ -325,7 +371,27 @@ export function UserManagement() {
                   </option>
                 ))}
               </select>
+              {currentUserRole === "department_admin" && editUser.id === currentUserId && (
+                <input type="hidden" name="department" value={editUser.department} />
+              )}
             </label>
+            <label className="block text-sm font-bold">
+              권한
+              <select name="role" className="input mt-1" defaultValue={editUser.role} required>
+                {USER_ROLE_OPTIONS.filter(
+                  (role) => isFullAdmin || role.value !== "admin",
+                ).map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {!isFullAdmin && (
+              <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                부서관리자는 관리자 권한을 부여하거나 관리자 계정을 수정할 수 없습니다.
+              </p>
+            )}
             <div className="flex justify-end gap-2">
               <button type="button" className="btn-secondary" onClick={() => setEditUser(null)}>
                 취소

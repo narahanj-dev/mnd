@@ -1,4 +1,4 @@
-import type { EventStatus, EventType } from "@/types";
+import type { EventStatus, EventType, UserRole } from "@/types";
 
 export const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
   { value: "leave", label: "휴가" },
@@ -32,6 +32,18 @@ export const EVENT_TYPE_STYLES: Record<EventType, string> = {
   weekend_outing: "bg-emerald-100 text-emerald-800 border-emerald-200",
   weekday_outing: "bg-cyan-100 text-cyan-800 border-cyan-200",
   anniversary: "bg-amber-100 text-amber-800 border-amber-200",
+};
+
+export const USER_ROLE_OPTIONS: { value: UserRole; label: string }[] = [
+  { value: "admin", label: "관리자" },
+  { value: "department_admin", label: "부서관리자" },
+  { value: "user", label: "일반사용자" },
+];
+
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+  admin: "관리자",
+  department_admin: "부서관리자",
+  user: "일반사용자",
 };
 
 export const DEPARTMENTS = ["교향악대", "관악대", "전통악대", "팡파르대", "대대본부"] as const;

@@ -1,4 +1,4 @@
-export type UserRole = "user" | "admin";
+export type UserRole = "user" | "department_admin" | "admin";
 export type AccountStatus = "active" | "inactive" | "pending";
 export type EventType = "leave" | "overnight" | "weekend_outing" | "weekday_outing" | "anniversary";
 export type EventStatus =

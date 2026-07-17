@@ -19,12 +19,12 @@ export function LoginForm() {
     setLoading(true);
     setError("");
     try {
-      const result = await parseJsonResponse<{ role: "user" | "admin" }>(await fetch("/api/auth/login", {
+      await parseJsonResponse(await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ loginId, password, adminOnly }),
       }));
-      router.replace(adminOnly || result.role === "admin" ? "/admin/settings" : "/calendar");
+      router.replace("/calendar");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "로그인에 실패했습니다.");

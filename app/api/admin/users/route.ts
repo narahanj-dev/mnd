@@ -1,19 +1,27 @@
 import { z } from "zod";
-import { requireAdmin, authErrorResponse } from "@/lib/auth/guards";
+import { requireAdmin, requireUserManager, authErrorResponse } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DEPARTMENTS, loginIdToEmail } from "@/lib/constants";
 
 export async function GET() {
   try {
-    const { user } = await requireAdmin();
+    const { user, profile } = await requireUserManager();
     const admin = createAdminClient();
-    const { data, error } = await admin
-      .from("profiles")
-      .select("*")
-      .order("created_at");
+    let query = admin.from("profiles").select("*").order("created_at");
 
+    if (profile.role === "department_admin") {
+      query = query.eq("department", profile.department);
+    }
+
+    const { data, error } = await query;
     if (error) return Response.json({ error: error.message }, { status: 400 });
-    return Response.json({ users: data ?? [], currentUserId: user.id });
+
+    return Response.json({
+      users: data ?? [],
+      currentUserId: user.id,
+      currentUserRole: profile.role,
+      currentUserDepartment: profile.department,
+    });
   } catch (error) {
     return authErrorResponse(error);
   }
@@ -24,7 +32,7 @@ const schema = z.object({
   password: z.string().min(4).max(100),
   displayName: z.string().min(1).max(50),
   department: z.enum(DEPARTMENTS),
-  role: z.enum(["user", "admin"]).default("user"),
+  role: z.enum(["user", "department_admin", "admin"]).default("user"),
 });
 
 export async function POST(request: Request) {

@@ -3,7 +3,10 @@ import type { Profile } from "@/types";
 
 export async function requireUser() {
   const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
   if (error || !user) {
     throw new Error("UNAUTHORIZED");
@@ -28,6 +31,26 @@ export async function requireAdmin() {
     throw new Error("FORBIDDEN");
   }
   return result;
+}
+
+export async function requireUserManager() {
+  const result = await requireUser();
+  if (result.profile.role !== "admin" && result.profile.role !== "department_admin") {
+    throw new Error("FORBIDDEN");
+  }
+  return result;
+}
+
+export function canManageUser(
+  manager: Pick<Profile, "role" | "department">,
+  target: Pick<Profile, "role" | "department">,
+) {
+  if (manager.role === "admin") return true;
+  return (
+    manager.role === "department_admin" &&
+    manager.department === target.department &&
+    target.role !== "admin"
+  );
 }
 
 export function authErrorResponse(error: unknown) {

@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { requireAdmin, authErrorResponse } from "@/lib/auth/guards";
+import {
+  authErrorResponse,
+  canManageUser,
+  requireUserManager,
+} from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DEPARTMENTS, loginIdToEmail } from "@/lib/constants";
 import type { Profile } from "@/types";
@@ -8,6 +12,7 @@ const updateSchema = z.object({
   action: z.literal("updateIdentity"),
   loginId: z.string().regex(/^[A-Za-z0-9_-]{4,30}$/),
   department: z.enum(DEPARTMENTS),
+  role: z.enum(["user", "department_admin", "admin"]),
 });
 
 const resetPasswordSchema = z.object({
@@ -18,7 +23,7 @@ const patchSchema = z.discriminatedUnion("action", [updateSchema, resetPasswordS
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const { user: actingAdmin } = await requireAdmin();
+    const { user: actingUser, profile: actingProfile } = await requireUserManager();
     const { id } = await context.params;
     const parsed = patchSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
@@ -36,9 +41,42 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       return Response.json({ error: "사용자 계정을 찾을 수 없습니다." }, { status: 404 });
     }
 
+    if (!canManageUser(actingProfile, targetProfile)) {
+      return Response.json(
+        { error: "해당 사용자를 관리할 권한이 없습니다." },
+        { status: 403 },
+      );
+    }
+
+    if (
+      parsed.data.action === "updateIdentity" &&
+      actingProfile.role === "department_admin" &&
+      parsed.data.role === "admin"
+    ) {
+      return Response.json(
+        { error: "관리자 권한은 관리자만 부여할 수 있습니다." },
+        { status: 403 },
+      );
+    }
+
+    if (
+      parsed.data.action === "updateIdentity" &&
+      actingProfile.role === "department_admin" &&
+      actingUser.id === id &&
+      parsed.data.department !== actingProfile.department
+    ) {
+      return Response.json(
+        { error: "부서관리자는 자신의 부서를 직접 변경할 수 없습니다." },
+        { status: 400 },
+      );
+    }
+
     const { data: authData, error: authReadError } = await admin.auth.admin.getUserById(id);
     if (authReadError || !authData.user) {
-      return Response.json({ error: authReadError?.message ?? "인증 계정을 찾을 수 없습니다." }, { status: 404 });
+      return Response.json(
+        { error: authReadError?.message ?? "인증 계정을 찾을 수 없습니다." },
+        { status: 404 },
+      );
     }
 
     if (parsed.data.action === "resetPassword") {
@@ -61,10 +99,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (profileError) return Response.json({ error: profileError.message }, { status: 400 });
 
       await admin.from("messages").insert({
-        sender_id: actingAdmin.id,
+        sender_id: actingUser.id,
         recipient_id: id,
         title: "비밀번호 초기화 안내",
-        content: "관리자가 비밀번호를 12345로 초기화했습니다. 로그인 후 새 비밀번호로 변경하세요.",
+        content: "사용자 관리 담당자가 비밀번호를 12345로 초기화했습니다. 로그인 후 새 비밀번호로 변경하세요.",
         message_type: "password_reset",
       });
 
@@ -73,6 +111,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     const nextLoginId = parsed.data.loginId.trim();
     const nextDepartment = parsed.data.department;
+    const nextRole = parsed.data.role;
 
     if (nextLoginId !== targetProfile.login_id) {
       const { data: duplicate } = await admin
@@ -87,16 +126,22 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       }
     }
 
-    const previousMetadata = authData.user.user_metadata ?? {};
-    const nextMetadata = {
-      ...previousMetadata,
+    const previousUserMetadata = authData.user.user_metadata ?? {};
+    const previousAppMetadata = authData.user.app_metadata ?? {};
+    const nextUserMetadata = {
+      ...previousUserMetadata,
       login_id: nextLoginId,
       department: nextDepartment,
+    };
+    const nextAppMetadata = {
+      ...previousAppMetadata,
+      role: nextRole,
     };
 
     const { error: authUpdateError } = await admin.auth.admin.updateUserById(id, {
       email: loginIdToEmail(nextLoginId),
-      user_metadata: nextMetadata,
+      user_metadata: nextUserMetadata,
+      app_metadata: nextAppMetadata,
     });
 
     if (authUpdateError) {
@@ -105,13 +150,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     const { error: profileUpdateError } = await admin
       .from("profiles")
-      .update({ login_id: nextLoginId, department: nextDepartment })
+      .update({ login_id: nextLoginId, department: nextDepartment, role: nextRole })
       .eq("id", id);
 
     if (profileUpdateError) {
       await admin.auth.admin.updateUserById(id, {
         email: loginIdToEmail(targetProfile.login_id),
-        user_metadata: previousMetadata,
+        user_metadata: previousUserMetadata,
+        app_metadata: previousAppMetadata,
       });
       return Response.json({ error: profileUpdateError.message }, { status: 400 });
     }
@@ -131,13 +177,21 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (linkedRequestError || legacyRequestError) {
       await admin
         .from("profiles")
-        .update({ login_id: targetProfile.login_id, department: targetProfile.department })
+        .update({
+          login_id: targetProfile.login_id,
+          department: targetProfile.department,
+          role: targetProfile.role,
+        })
         .eq("id", id);
       await admin.auth.admin.updateUserById(id, {
         email: loginIdToEmail(targetProfile.login_id),
-        user_metadata: previousMetadata,
+        user_metadata: previousUserMetadata,
+        app_metadata: previousAppMetadata,
       });
-      return Response.json({ error: linkedRequestError?.message ?? legacyRequestError?.message }, { status: 400 });
+      return Response.json(
+        { error: linkedRequestError?.message ?? legacyRequestError?.message },
+        { status: 400 },
+      );
     }
 
     return Response.json({ ok: true });
@@ -230,22 +284,34 @@ async function clearRelatedUserData(admin: AdminClient, target: DeletionTarget) 
 
 export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const { user: actingAdmin } = await requireAdmin();
+    const { user: actingUser, profile: actingProfile } = await requireUserManager();
     const { id } = await context.params;
 
-    if (actingAdmin.id === id) {
-      return Response.json({ error: "현재 로그인한 관리자 계정은 삭제할 수 없습니다." }, { status: 400 });
+    if (actingUser.id === id) {
+      return Response.json(
+        { error: "현재 로그인한 계정은 삭제할 수 없습니다." },
+        { status: 400 },
+      );
     }
 
     const admin = createAdminClient();
     const { data: targetProfile, error: profileError } = await admin
       .from("profiles")
-      .select("id, login_id")
+      .select("*")
       .eq("id", id)
-      .maybeSingle<DeletionTarget>();
+      .maybeSingle<Profile>();
 
     if (profileError) return Response.json({ error: profileError.message }, { status: 400 });
-    if (!targetProfile) return Response.json({ error: "사용자 계정을 찾을 수 없습니다." }, { status: 404 });
+    if (!targetProfile) {
+      return Response.json({ error: "사용자 계정을 찾을 수 없습니다." }, { status: 404 });
+    }
+
+    if (!canManageUser(actingProfile, targetProfile)) {
+      return Response.json(
+        { error: "해당 사용자를 삭제할 권한이 없습니다." },
+        { status: 403 },
+      );
+    }
 
     const cleanupError = await clearRelatedUserData(admin, targetProfile);
     if (cleanupError) {
@@ -259,12 +325,18 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
     if (authDeleteError) {
       const authUserMissing = /not found|does not exist/i.test(authDeleteError.message);
       if (!authUserMissing) {
-        return Response.json({ error: `인증 계정 삭제 실패: ${authDeleteError.message}` }, { status: 400 });
+        return Response.json(
+          { error: `인증 계정 삭제 실패: ${authDeleteError.message}` },
+          { status: 400 },
+        );
       }
 
       const { error: orphanProfileError } = await admin.from("profiles").delete().eq("id", id);
       if (orphanProfileError) {
-        return Response.json({ error: `고아 프로필 삭제 실패: ${orphanProfileError.message}` }, { status: 400 });
+        return Response.json(
+          { error: `고아 프로필 삭제 실패: ${orphanProfileError.message}` },
+          { status: 400 },
+        );
       }
     }
 

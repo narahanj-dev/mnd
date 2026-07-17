@@ -3,19 +3,19 @@
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameMonth, isToday, startOfMonth, startOfWeek } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EVENT_TYPE_LABELS, EVENT_TYPE_STYLES } from "@/lib/constants";
+import { EVENT_TYPE_LABELS, EVENT_TYPE_OPTIONS, EVENT_TYPE_STYLES } from "@/lib/constants";
 import { parseJsonResponse } from "@/lib/utils";
 import type { CalendarEvent, EventType, Profile } from "@/types";
 import { EventFormModal } from "./EventFormModal";
 
-const types: EventType[] = ["leave", "outing", "schedule", "anniversary"];
+const types: EventType[] = EVENT_TYPE_OPTIONS.map((option) => option.value);
 
 export function CalendarBoard({ profile }: { profile: Profile }) {
   const [months, setMonths] = useState(12);
   const [previousMonths, setPreviousMonths] = useState(0);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [enabled, setEnabled] = useState<Record<EventType, boolean>>({ leave: true, outing: true, schedule: true, anniversary: true });
+  const [enabled, setEnabled] = useState<Record<EventType, boolean>>({ leave: true, overnight: true, weekend_outing: true, weekday_outing: true, anniversary: true });
   const [department, setDepartment] = useState("all");
   const [userId, setUserId] = useState("all");
   const [myOnly, setMyOnly] = useState(false);

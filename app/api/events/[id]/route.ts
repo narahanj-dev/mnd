@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { requireUser, authErrorResponse } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { EVENT_TYPE_VALUES } from "@/lib/constants";
+import type { EventType } from "@/types";
 
 const schema = z.object({
   action: z.enum(["update", "delete"]),
   reason: z.string().trim().min(1).max(1000),
-  eventType: z.enum(["leave", "outing", "schedule", "anniversary"]).optional(),
+  eventType: z.enum(EVENT_TYPE_VALUES).optional(),
   title: z.string().min(1).max(100).optional(),
   startDate: z.string().date().optional(),
   endDate: z.string().date().optional(),
@@ -20,7 +22,7 @@ const schema = z.object({
 type EventRow = {
   id: string;
   user_id: string;
-  event_type: "leave" | "outing" | "schedule" | "anniversary";
+  event_type: EventType;
   title: string;
   start_date: string;
   end_date: string;

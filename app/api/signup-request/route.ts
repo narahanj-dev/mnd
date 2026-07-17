@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { DEPARTMENTS } from "@/lib/constants";
 
 const schema = z.object({
   name: z.string().min(1).max(50),
-  department: z.string().min(1).max(80),
+  department: z.enum(DEPARTMENTS),
   contact: z.string().min(1).max(100),
   birthDate: z.string().date(),
   requestedLoginId: z.string().regex(/^[A-Za-z0-9_-]{4,30}$/),

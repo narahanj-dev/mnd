@@ -1,6 +1,6 @@
 export type UserRole = "user" | "admin";
 export type AccountStatus = "active" | "inactive" | "pending";
-export type EventType = "leave" | "outing" | "schedule" | "anniversary";
+export type EventType = "leave" | "overnight" | "weekend_outing" | "weekday_outing" | "anniversary";
 export type EventStatus =
   | "pending"
   | "approved"

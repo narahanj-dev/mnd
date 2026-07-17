@@ -1,9 +1,20 @@
 import type { EventStatus, EventType } from "@/types";
 
+export const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
+  { value: "leave", label: "휴가" },
+  { value: "overnight", label: "외박" },
+  { value: "weekend_outing", label: "주말외출" },
+  { value: "weekday_outing", label: "평일외출" },
+  { value: "anniversary", label: "기념일" },
+];
+
+export const EVENT_TYPE_VALUES = ["leave", "overnight", "weekend_outing", "weekday_outing", "anniversary"] as const;
+
 export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   leave: "휴가",
-  outing: "외출",
-  schedule: "일정",
+  overnight: "외박",
+  weekend_outing: "주말외출",
+  weekday_outing: "평일외출",
   anniversary: "기념일",
 };
 
@@ -17,10 +28,13 @@ export const EVENT_STATUS_LABELS: Record<EventStatus, string> = {
 
 export const EVENT_TYPE_STYLES: Record<EventType, string> = {
   leave: "bg-blue-100 text-blue-800 border-blue-200",
-  outing: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  schedule: "bg-violet-100 text-violet-800 border-violet-200",
+  overnight: "bg-indigo-100 text-indigo-800 border-indigo-200",
+  weekend_outing: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  weekday_outing: "bg-cyan-100 text-cyan-800 border-cyan-200",
   anniversary: "bg-amber-100 text-amber-800 border-amber-200",
 };
+
+export const DEPARTMENTS = ["교향악대", "관악대", "전통악대", "팡파르대", "대대본부"] as const;
 
 export const LOGIN_EMAIL_DOMAIN = "leave-calendar.local";
 

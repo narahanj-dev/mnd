@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { requireUser, authErrorResponse } from "@/lib/auth/guards";
+import { EVENT_TYPE_VALUES } from "@/lib/constants";
 
 const createSchema = z.object({
-  eventType: z.enum(["leave", "outing", "schedule", "anniversary"]),
+  eventType: z.enum(EVENT_TYPE_VALUES),
   title: z.string().min(1).max(100),
   startDate: z.string().date(),
   endDate: z.string().date(),

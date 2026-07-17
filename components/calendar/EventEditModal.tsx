@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
+import { EVENT_TYPE_OPTIONS } from "@/lib/constants";
 import { parseJsonResponse } from "@/lib/utils";
 import type { CalendarEvent } from "@/types";
 
@@ -74,7 +75,7 @@ export function EventEditModal({
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <label className="text-sm font-bold">종류
             <select name="eventType" defaultValue={event.event_type} className="input mt-1">
-              <option value="leave">휴가</option><option value="outing">외출</option><option value="schedule">일정</option><option value="anniversary">기념일</option>
+              {EVENT_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
           <label className="text-sm font-bold">제목<input name="title" defaultValue={event.title} className="input mt-1" required maxLength={100} /></label>

@@ -20,10 +20,12 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const start = url.searchParams.get("start");
     const end = url.searchParams.get("end");
+    const view = url.searchParams.get("view");
     let query = supabase
       .from("calendar_events")
       .select("*, profile:profiles!calendar_events_user_id_fkey(display_name,department)")
       .order("start_date", { ascending: true });
+    if (view === "calendar") query = query.eq("status", "approved");
     if (start) query = query.gte("end_date", start);
     if (end) query = query.lte("start_date", end);
     const { data, error } = await query;

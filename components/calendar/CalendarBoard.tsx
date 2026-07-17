@@ -31,7 +31,7 @@ export function CalendarBoard({ profile }: { profile: Profile }) {
       const rangeLastMonth = addMonths(startOfMonth(new Date()), months - 1);
       const start = format(startOfMonth(rangeFirstMonth), "yyyy-MM-dd");
       const end = format(endOfMonth(rangeLastMonth), "yyyy-MM-dd");
-      const data = await parseJsonResponse<{ events: CalendarEvent[] }>(await fetch(`/api/events?start=${start}&end=${end}`, { cache: "no-store" }));
+      const data = await parseJsonResponse<{ events: CalendarEvent[] }>(await fetch(`/api/events?view=calendar&start=${start}&end=${end}`, { cache: "no-store" }));
       setEvents(data.events);
     } catch (error) { console.error(error); }
     finally { setLoading(false); }

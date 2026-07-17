@@ -1,6 +1,7 @@
 export type UserRole = "user" | "department_admin" | "admin";
 export type AccountStatus = "active" | "inactive" | "pending";
 export type EventType = "leave" | "overnight" | "weekend_outing" | "weekday_outing" | "anniversary";
+export type UsageEventType = Exclude<EventType, "anniversary">;
 export type EventStatus =
   | "pending"
   | "approved"
@@ -85,4 +86,37 @@ export interface Message {
   created_at: string;
   read_at: string | null;
   sender?: Pick<Profile, "display_name"> | null;
+}
+
+export interface UsageUserSummary {
+  id: string;
+  login_id: string;
+  display_name: string;
+  department: string;
+  role: UserRole;
+}
+
+export interface UsageEventDetail {
+  id: string;
+  event_type: UsageEventType;
+  title: string;
+  start_date: string;
+  end_date: string;
+  description: string | null;
+  public_note: string | null;
+  dates: string[];
+}
+
+export interface UsageCategorySummary {
+  eventType: UsageEventType;
+  label: string;
+  totalDays: number;
+  eventCount: number;
+  usedDates: string[];
+  events: UsageEventDetail[];
+}
+
+export interface UsageDetailResponse {
+  user: UsageUserSummary;
+  categories: UsageCategorySummary[];
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Inbox, LogOut, ShieldCheck, UserRound, Users } from "lucide-react";
+import { BarChart3, CalendarDays, Inbox, LogOut, ShieldCheck, UserRound, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -8,6 +8,7 @@ import type { Profile } from "@/types";
 
 const baseLinks = [
   { href: "/calendar", label: "달력", icon: CalendarDays },
+  { href: "/usage", label: "사용현황", icon: BarChart3 },
   { href: "/my-events", label: "내 일정", icon: UserRound },
   { href: "/messages", label: "쪽지", icon: Inbox },
 ];

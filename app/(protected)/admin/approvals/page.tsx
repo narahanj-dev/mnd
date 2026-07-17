@@ -1,2 +1,5 @@
-import { ApprovalList } from "@/components/admin/ApprovalList";
-export default function ApprovalsPage() { return <ApprovalList />; }
+import { redirect } from "next/navigation";
+
+export default function LegacyApprovalsPage() {
+  redirect("/approvals");
+}

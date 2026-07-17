@@ -12,9 +12,9 @@ const baseLinks = [
   { href: "/my-events", label: "내 일정", icon: UserRound },
   { href: "/messages", label: "쪽지", icon: Inbox },
 ];
+const approvalLink = { href: "/approvals", label: "일정 승인", icon: ShieldCheck };
 const userManagementLink = { href: "/users", label: "사용자 관리", icon: Users };
-const adminLinks = [
-  { href: "/admin/approvals", label: "일정 승인", icon: ShieldCheck },
+const adminOnlyLinks = [
   { href: "/admin/signup-requests", label: "가입 신청", icon: Inbox },
   { href: "/admin/settings", label: "관리자 설정", icon: ShieldCheck },
 ];
@@ -33,9 +33,9 @@ export function Header({
   const [loading, setLoading] = useState(false);
   const links =
     profile.role === "admin"
-      ? [...baseLinks, ...adminLinks.slice(0, 2), userManagementLink, adminLinks[2]]
+      ? [...baseLinks, approvalLink, adminOnlyLinks[0], userManagementLink, adminOnlyLinks[1]]
       : profile.role === "department_admin"
-        ? [...baseLinks, userManagementLink]
+        ? [...baseLinks, approvalLink, userManagementLink]
         : baseLinks;
 
   async function logout() {
@@ -58,7 +58,7 @@ export function Header({
             const count =
               href === "/messages"
                 ? unreadCount
-                : href === "/admin/approvals"
+                : href === "/approvals"
                   ? pendingCount
                   : 0;
             return (

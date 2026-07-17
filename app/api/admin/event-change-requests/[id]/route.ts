@@ -1,15 +1,18 @@
 import { z } from "zod";
-import { requireAdmin, authErrorResponse } from "@/lib/auth/guards";
+import { requireUserManager, authErrorResponse, canManageUser } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { Profile } from "@/types";
 
 const schema = z.object({
   decision: z.enum(["approve", "reject"]),
   reason: z.string().max(1000).optional(),
 });
 
+type TargetProfile = Pick<Profile, "role" | "department">;
+
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const { user, profile } = await requireAdmin();
+    const { user, profile } = await requireUserManager();
     const { id } = await context.params;
     const parsed = schema.safeParse(await request.json().catch(() => null));
     if (!parsed.success || (parsed.data.decision === "reject" && !parsed.data.reason?.trim())) {
@@ -17,9 +20,19 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
 
     const admin = createAdminClient();
-    const { data: changeRequest } = await admin.from("event_change_requests").select("*, event:calendar_events!event_change_requests_event_id_fkey(*)").eq("id", id).single();
-    if (!changeRequest || changeRequest.status !== "pending" || !changeRequest.event) {
+    const { data: changeRequest, error: requestLookupError } = await admin
+      .from("event_change_requests")
+      .select("*, event:calendar_events!event_change_requests_event_id_fkey(*, profile:profiles!calendar_events_user_id_fkey(role,department))")
+      .eq("id", id)
+      .single();
+
+    if (requestLookupError || !changeRequest || changeRequest.status !== "pending" || !changeRequest.event) {
       return Response.json({ error: "처리할 변경 요청을 찾을 수 없습니다." }, { status: 404 });
+    }
+
+    const targetProfile = changeRequest.event.profile as TargetProfile | null;
+    if (!targetProfile || !canManageUser(profile, targetProfile)) {
+      return Response.json({ error: "소속 부서원의 일정만 처리할 수 있습니다." }, { status: 403 });
     }
 
     const approved = parsed.data.decision === "approve";
@@ -49,7 +62,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       rejection_reason: approved ? null : parsed.data.reason,
       processed_by: user.id,
       processed_at: new Date().toISOString(),
-    }).eq("id", id);
+    }).eq("id", id).eq("status", "pending");
     if (requestError) return Response.json({ error: requestError.message }, { status: 400 });
 
     const requestLabel = changeRequest.request_type === "update" ? "수정" : "삭제";
@@ -68,5 +81,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (messageError) return Response.json({ error: messageError.message }, { status: 400 });
 
     return Response.json({ ok: true });
-  } catch (error) { return authErrorResponse(error); }
+  } catch (error) {
+    return authErrorResponse(error);
+  }
 }

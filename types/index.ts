@@ -45,7 +45,7 @@ export interface CalendarEvent {
   created_at: string;
   updated_at: string;
   is_system_generated?: boolean;
-  profile?: Pick<Profile, "display_name" | "department">;
+  profile?: Pick<Profile, "display_name" | "department" | "role">;
 }
 
 export interface EventChangeRequest {
@@ -70,7 +70,7 @@ export interface EventChangeRequest {
   processed_at: string | null;
   created_at: string;
   event?: CalendarEvent;
-  requester?: Pick<Profile, "display_name" | "department">;
+  requester?: Pick<Profile, "display_name" | "department" | "role">;
 }
 
 export interface Message {

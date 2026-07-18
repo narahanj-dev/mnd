@@ -8,10 +8,10 @@ const schema = z.object({ loginId: z.string().min(4).max(30), password: z.string
 
 export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "아이디와 비밀번호를 확인하세요." }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: "군번과 비밀번호를 확인하세요." }, { status: 400 });
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword({ email: loginIdToEmail(parsed.data.loginId), password: parsed.data.password });
-  if (error || !data.user) return Response.json({ error: "아이디 또는 비밀번호가 올바르지 않습니다." }, { status: 401 });
+  if (error || !data.user) return Response.json({ error: "군번 또는 비밀번호가 올바르지 않습니다." }, { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", data.user.id).single<Profile>();
   if (!profile || profile.account_status !== "active") {

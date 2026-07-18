@@ -32,7 +32,7 @@ type DetailResponse = {
 };
 
 const FILTER_OPTIONS: { value: UsageEventType; label: string }[] = [
-  { value: "leave", label: "휴가" },
+  { value: "leave", label: "연가" },
   { value: "overnight", label: "외박" },
   { value: "weekend_outing", label: "외출" },
   { value: "weekday_outing", label: "평일외출" },
@@ -233,7 +233,7 @@ export function MyEventsDetail({ userId }: { userId: string }) {
           <h1 className="text-2xl font-black">{data ? `${data.user.display_name} 일정` : "내 일정"}</h1>
           <p className="mt-1 text-sm text-slate-500">
             {data
-              ? `${data.user.department} · ${USER_ROLE_LABELS[data.user.role]} · 아이디 ${data.user.login_id}`
+              ? `${data.user.department} · ${USER_ROLE_LABELS[data.user.role]} · 군번 ${data.user.login_id}`
               : "조회할 연도와 월을 선택하세요."}
           </p>
         </div>

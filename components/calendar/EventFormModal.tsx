@@ -80,10 +80,10 @@ export function EventFormModal({
               <p className="mt-1 text-xs text-slate-500">표시 일정 {events.length}건</p>
             </div>
             <div>
-              <p className="text-xs font-bold text-slate-500">휴가·외박 인원 비율</p>
+              <p className="text-xs font-bold text-slate-500">연가·외박 인원 비율</p>
               <p className="mt-1 text-2xl font-black text-blue-800">{summary.percentage.toFixed(1)}%</p>
               <p className="mt-1 text-xs text-slate-500">
-                휴가·외박 {summary.absencePeople.size}명 / {selectedDepartment === "all" ? "전체" : selectedDepartment} 부서원 {summary.memberCount}명
+                연가·외박 {summary.absencePeople.size}명 / {selectedDepartment === "all" ? "전체" : selectedDepartment} 부서원 {summary.memberCount}명
               </p>
             </div>
           </div>

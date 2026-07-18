@@ -122,7 +122,7 @@ export function UsageUserList() {
   const title = viewerRole === "user" ? "내 사용현황" : `${selectedDepartment} 사용현황`;
   const description =
     viewerRole === "user"
-      ? "본인의 휴가·외박·외출 사용현황을 확인할 수 있습니다."
+      ? "본인의 연가·외박·외출 사용현황을 확인할 수 있습니다."
       : `${selectedDepartment} 소속 인원을 선택해 상세 사용현황을 확인하세요.`;
 
   return (
@@ -158,7 +158,7 @@ export function UsageUserList() {
               className="input pl-10"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="이름 또는 아이디로 검색"
+              placeholder="이름 또는 군번로 검색"
             />
           </label>
         </div>
@@ -184,7 +184,7 @@ export function UsageUserList() {
                 <div className="mt-1 truncate text-sm text-slate-500">
                   {user.department} · {USER_ROLE_LABELS[user.role]}
                 </div>
-                <div className="mt-1 truncate text-xs text-slate-400">아이디 {user.login_id}</div>
+                <div className="mt-1 truncate text-xs text-slate-400">군번 {user.login_id}</div>
               </div>
               <span className="shrink-0 text-sm font-bold text-blue-700">보기</span>
             </Link>

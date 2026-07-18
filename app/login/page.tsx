@@ -14,7 +14,7 @@ export default async function LoginPage() {
         <div className="mb-7 text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-700 text-white"><CalendarCheck2 size={30} /></div>
           <h1 className="text-2xl font-black tracking-tight">부서 공동 연차달력</h1>
-          <p className="mt-2 text-sm text-slate-500">휴가·외출·일정·기념일 통합 관리</p>
+          <p className="mt-2 text-sm text-slate-500">연가·외출·일정·기념일 통합 관리</p>
         </div>
         <LoginForm />
       </section>

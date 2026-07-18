@@ -121,7 +121,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         .maybeSingle();
 
       if (duplicate) {
-        return Response.json({ error: "이미 사용 중인 아이디입니다." }, { status: 409 });
+        return Response.json({ error: "이미 사용 중인 군번입니다." }, { status: 409 });
       }
     }
 

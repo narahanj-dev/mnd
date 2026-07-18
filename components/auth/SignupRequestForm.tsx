@@ -34,7 +34,7 @@ export function SignupRequestForm() {
       <label className="block text-sm font-bold">생년월일<input name="birthDate" type="date" className="input mt-1" required max={new Date().toISOString().slice(0, 10)} /></label>
       <label className="block text-sm font-bold">소속 부서<select name="department" className="input mt-1" required defaultValue=""><option value="" disabled>부서를 선택하세요</option>{DEPARTMENTS.map((department) => <option key={department} value={department}>{department}</option>)}</select></label>
       <label className="block text-sm font-bold">내부 연락처 또는 이메일<input name="contact" className="input mt-1" required maxLength={100} /></label>
-      <label className="block text-sm font-bold">희망 아이디<input name="requestedLoginId" className="input mt-1" required minLength={4} maxLength={30} /></label>
+      <label className="block text-sm font-bold">희망 군번<input name="requestedLoginId" className="input mt-1" required minLength={4} maxLength={30} /></label>
       <label className="block text-sm font-bold">신청 사유<textarea name="reason" className="input mt-1 min-h-28" maxLength={500} /></label>
       {error && <p className="text-sm font-semibold text-rose-700">{error}</p>}
       <div className="flex justify-end gap-2"><button type="button" onClick={() => router.back()} className="btn-secondary">취소</button><button className="btn-primary" disabled={loading}>{loading ? "접수 중..." : "신청하기"}</button></div>

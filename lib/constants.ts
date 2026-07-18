@@ -1,7 +1,7 @@
 import type { EventStatus, EventType, UserRole } from "@/types";
 
 export const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
-  { value: "leave", label: "휴가" },
+  { value: "leave", label: "연가" },
   { value: "overnight", label: "외박" },
   { value: "weekend_outing", label: "주말외출" },
   { value: "weekday_outing", label: "평일외출" },
@@ -11,7 +11,7 @@ export const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
 export const EVENT_TYPE_VALUES = ["leave", "overnight", "weekend_outing", "weekday_outing", "anniversary"] as const;
 
 export const EVENT_TYPE_LABELS: Record<EventType, string> = {
-  leave: "휴가",
+  leave: "연가",
   overnight: "외박",
   weekend_outing: "주말외출",
   weekday_outing: "평일외출",

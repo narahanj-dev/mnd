@@ -111,8 +111,22 @@ export function CalendarBoard({ profile }: { profile: Profile }) {
                 {days.map((day) => {
                   const iso = format(day, "yyyy-MM-dd");
                   const dayEvents = filtered.filter((event) => event.start_date <= iso && event.end_date >= iso);
+                  const absencePeople = new Set(
+                    dayEvents
+                      .filter((event) => event.event_type === "leave" || event.event_type === "overnight")
+                      .map((event) => event.user_id),
+                  );
+                  const memberCount = department === "all"
+                    ? Object.values(departmentCounts).reduce((sum, value) => sum + value, 0)
+                    : departmentCounts[department] ?? 0;
+                  const absencePercentage = memberCount > 0 ? (absencePeople.size / memberCount) * 100 : 0;
+                  const dayCellStyle = absencePercentage >= 21
+                    ? "bg-red-100 hover:bg-red-200"
+                    : !isSameMonth(day, month)
+                      ? "bg-slate-50 text-slate-300 hover:bg-blue-50"
+                      : "bg-white hover:bg-blue-50";
                   return (
-                    <button key={iso} onClick={() => setSelectedDate(iso)} className={`min-h-28 border-r border-t border-slate-200 p-1.5 text-left align-top hover:bg-blue-50 sm:min-h-32 ${!isSameMonth(day, month) ? "bg-slate-50 text-slate-300" : "bg-white"}`}>
+                    <button key={iso} onClick={() => setSelectedDate(iso)} className={`min-h-28 border-r border-t border-slate-200 p-1.5 text-left align-top sm:min-h-32 ${dayCellStyle}`}>
                       <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold ${isToday(day) ? "bg-blue-700 text-white" : day.getDay() === 0 ? "text-rose-600" : day.getDay() === 6 ? "text-blue-600" : ""}`}>{format(day, "d")}</span>
                       <div className="mt-1 space-y-1">
                         {dayEvents.slice(0, 3).map((event) => <div key={event.id} className={`truncate rounded border px-1.5 py-1 text-[10px] font-bold sm:text-xs ${EVENT_TYPE_STYLES[event.event_type]}`}>[{EVENT_TYPE_LABELS[event.event_type]}] {event.profile?.display_name} {event.title}{event.status === "pending" ? " (대기)" : ""}</div>)}

@@ -103,7 +103,7 @@ export async function POST(request: Request) {
     await admin.from("messages").insert({
       recipient_id: data.user.id,
       title: "계정 생성 완료",
-      content: `아이디 ${parsed.data.loginId} 계정이 생성되었습니다. 첫 로그인 후 비밀번호를 변경하세요.`,
+      content: `군번 ${parsed.data.loginId} 계정이 생성되었습니다. 첫 로그인 후 비밀번호를 변경하세요.`,
       message_type: "account_created",
     });
 

@@ -13,7 +13,7 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "입력 내용을 확인하세요. 아이디는 영문·숫자·밑줄·하이픈 4~30자입니다." }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: "입력 내용을 확인하세요. 군번은 영문·숫자·밑줄·하이픈 4~30자입니다." }, { status: 400 });
   if (parsed.data.birthDate > new Date().toISOString().slice(0, 10)) {
     return Response.json({ error: "생년월일은 오늘 이후 날짜로 입력할 수 없습니다." }, { status: 400 });
   }

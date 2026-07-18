@@ -197,6 +197,7 @@ begin
 end;
 $$;
 
-create trigger on_auth_user_created
-after insert on auth.users
-for each row execute function public.handle_new_user();
+-- 회원가입 승인 API가 Auth 사용자 생성 후 profiles 행을 직접 생성합니다.
+-- Auth 트리거는 DB 제약 변경 시 전체 사용자 생성을 막을 수 있어 연결하지 않습니다.
+comment on function public.handle_new_user() is
+  '현재 앱에서는 회원가입 승인 API가 profiles 행을 직접 생성합니다. auth.users 자동 트리거는 사용하지 않습니다.';

@@ -55,7 +55,7 @@ begin
   ) values (
     new.id,
     'pending:' || new.id::text,
-    null,
+    encode(digest(new.id::text, 'sha256'), 'hex'),
     'pending',
     '미지정',
     coalesce((new.raw_app_meta_data->>'role')::public.user_role, 'user'),

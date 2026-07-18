@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Building2, ChevronRight } from "lucide-react";
+import { AlertCircle, ArrowLeft, Building2, CheckCircle2, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { parseJsonResponse } from "@/lib/utils";
 import type { UserRole } from "@/types";
@@ -27,6 +27,8 @@ type SignupResponse = {
   viewerDepartment: string;
 };
 
+type DecisionResponse = { ok: boolean; loginId?: string };
+
 export function SignupRequestList() {
   const [items, setItems] = useState<RequestItem[]>([]);
   const [departments, setDepartments] = useState<DepartmentSummary[]>([]);
@@ -35,6 +37,9 @@ export function SignupRequestList() {
   const [viewerDepartment, setViewerDepartment] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   const load = useCallback(async (department: string | null = null) => {
     setLoading(true);
@@ -70,17 +75,31 @@ export function SignupRequestList() {
       body.reason = reason;
     }
 
+    setProcessingId(item.id);
+    setActionError("");
+    setActionMessage("");
     try {
-      await parseJsonResponse(
+      const result = await parseJsonResponse<DecisionResponse>(
         await fetch(`/api/admin/signup-requests/${item.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         }),
       );
+      setActionMessage(
+        decision === "approve"
+          ? `가입 승인이 완료되었습니다.${result.loginId ? ` 발급 아이디: ${result.loginId}` : ""}`
+          : "가입신청을 거절했습니다.",
+      );
       await load(selectedDepartment);
     } catch (decisionError) {
-      alert(decisionError instanceof Error ? decisionError.message : "처리에 실패했습니다.");
+      setActionError(
+        decisionError instanceof Error && decisionError.message.trim()
+          ? decisionError.message
+          : "처리에 실패했습니다. Vercel 로그와 Supabase 설정을 확인하세요.",
+      );
+    } finally {
+      setProcessingId(null);
     }
   }
 
@@ -112,7 +131,11 @@ export function SignupRequestList() {
             <button
               key={department.name}
               type="button"
-              onClick={() => void load(department.name)}
+              onClick={() => {
+                setActionError("");
+                setActionMessage("");
+                void load(department.name);
+              }}
               className="card flex items-center gap-3 p-4 text-left transition hover:border-blue-300 hover:bg-blue-50"
             >
               <span className="rounded-xl bg-slate-100 p-2 text-slate-600"><Building2 size={20} /></span>
@@ -135,6 +158,8 @@ export function SignupRequestList() {
         onClick={() => {
           setSelectedDepartment(null);
           setItems([]);
+          setActionError("");
+          setActionMessage("");
         }}
         className="btn-secondary mb-4 flex items-center gap-1.5"
       >
@@ -142,6 +167,20 @@ export function SignupRequestList() {
       </button>
       <h1 className="mb-2 text-2xl font-black">{selectedDepartment} 가입 신청</h1>
       <p className="mb-5 text-sm text-slate-500">승인 또는 거절하면 처리된 신청은 이 화면에서 즉시 삭제됩니다.</p>
+
+      {actionError && (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-rose-300 bg-rose-50 p-4 text-sm font-bold text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
+          <AlertCircle className="mt-0.5 shrink-0" size={18} />
+          <span className="whitespace-pre-wrap break-words">{actionError}</span>
+        </div>
+      )}
+      {actionMessage && (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+          <CheckCircle2 className="mt-0.5 shrink-0" size={18} />
+          <span>{actionMessage}</span>
+        </div>
+      )}
+
       <div className="space-y-4">
         {items.length === 0 ? (
           <div className="card p-8 text-center text-slate-500">대기 중인 가입신청이 없습니다.</div>
@@ -160,8 +199,21 @@ export function SignupRequestList() {
                 <p className="mt-2 text-xs text-slate-400">{new Date(item.created_at).toLocaleString("ko-KR")}</p>
               </div>
               <div className="flex gap-2">
-                <button className="btn-primary" disabled={!item.has_password} title={!item.has_password ? "기존 신청은 재신청이 필요합니다." : undefined} onClick={() => void decide(item, "approve")}>승인</button>
-                <button className="btn-danger" onClick={() => void decide(item, "reject")}>거절</button>
+                <button
+                  className="btn-primary"
+                  disabled={!item.has_password || processingId !== null}
+                  title={!item.has_password ? "기존 신청은 재신청이 필요합니다." : undefined}
+                  onClick={() => void decide(item, "approve")}
+                >
+                  {processingId === item.id ? "처리 중..." : "승인"}
+                </button>
+                <button
+                  className="btn-danger"
+                  disabled={processingId !== null}
+                  onClick={() => void decide(item, "reject")}
+                >
+                  {processingId === item.id ? "처리 중..." : "거절"}
+                </button>
               </div>
             </div>
           </article>

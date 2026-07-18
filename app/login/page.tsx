@@ -37,8 +37,8 @@ export default async function LoginPage({
             <h2 className="text-sm font-black">공지사항</h2>
           </div>
           <ul className="mt-2.5 space-y-1.5 pl-5 text-sm font-semibold leading-6 text-amber-950 marker:text-amber-600">
-            <li className="list-disc">회원가입 시 아이디에 군번을 사용하지 마세요.</li>
-            <li className="list-disc">기존 가입자는 본인 이름을 영문 자판(영타)으로 입력해 로그인한 뒤, 사용자 관리에서 아이디를 변경할 수 있습니다.</li>
+            <li className="list-disc">회원가입 시 희망 아이디로 군번 및 숫자로만 이루어진 아이디는 사용할 수 없습니다.</li>
+            <li className="list-disc">관리자가 비밀번호를 초기화하면 임시 비밀번호는 mnd890701!로 변경되며, 로그인 후 반드시 새 비밀번호로 변경해야 합니다.</li>
           </ul>
         </aside>
 

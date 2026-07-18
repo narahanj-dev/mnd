@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { requireUser, authErrorResponse } from "@/lib/auth/guards";
-import { DEPARTMENTS, EVENT_TYPE_VALUES } from "@/lib/constants";
+import { DEPARTMENTS, EVENT_TYPE_VALUES, isValidEventTitle } from "@/lib/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { CalendarEvent } from "@/types";
 import { decryptProfile, decryptProfileRelation, maskDisplayName } from "@/lib/security/pii";
@@ -132,6 +132,7 @@ export async function POST(request: Request) {
     const parsed = createSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return Response.json({ error: "일정 입력값을 확인하세요." }, { status: 400 });
     const value = parsed.data;
+    if (!isValidEventTitle(value.eventType, value.title.trim())) return Response.json({ error: "선택한 표시 항목의 종류를 확인하세요." }, { status: 400 });
     if (value.endDate < value.startDate) return Response.json({ error: "종료일은 시작일보다 빠를 수 없습니다." }, { status: 400 });
     if (!value.allDay && (!value.startTime || !value.endTime || value.endTime <= value.startTime)) {
       return Response.json({ error: "시간 일정을 올바르게 입력하세요." }, { status: 400 });

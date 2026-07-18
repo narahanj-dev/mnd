@@ -9,6 +9,14 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const archived = url.searchParams.get("archived") === "true";
     const unread = url.searchParams.get("unread") === "true";
+    const admin = createAdminClient();
+    const expiresBefore = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+    const { error: cleanupError } = await admin
+      .from("messages")
+      .delete()
+      .eq("is_archived", false)
+      .lt("created_at", expiresBefore);
+    if (cleanupError) console.error("만료 쪽지 자동 삭제 실패:", cleanupError.message);
     let query = supabase.from("messages").select("*, sender:profiles!messages_sender_id_fkey(display_name)").eq("recipient_id", user.id).eq("is_archived", archived).order("created_at", { ascending: false });
     if (unread) query = query.eq("is_read", false);
     const { data, error } = await query;

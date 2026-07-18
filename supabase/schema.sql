@@ -109,6 +109,25 @@ create table public.messages (
   read_at timestamptz
 );
 
+create or replace function public.delete_expired_unarchived_messages()
+returns bigint
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  deleted_count bigint;
+begin
+  delete from public.messages
+  where is_archived = false
+    and created_at < now() - interval '15 days';
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+
+revoke all on function public.delete_expired_unarchived_messages() from public;
+
 create table public.password_history (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,

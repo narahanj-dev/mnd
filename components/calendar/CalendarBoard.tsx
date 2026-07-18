@@ -129,8 +129,15 @@ export function CalendarBoard({ profile }: { profile: Profile }) {
                     <button key={iso} onClick={() => setSelectedDate(iso)} className={`min-h-28 border-r border-t border-slate-200 p-1.5 text-left align-top sm:min-h-32 ${dayCellStyle}`}>
                       <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold ${isToday(day) ? "bg-blue-700 text-white" : day.getDay() === 0 ? "text-rose-600" : day.getDay() === 6 ? "text-blue-600" : ""}`}>{format(day, "d")}</span>
                       <div className="mt-1 space-y-1">
-                        {dayEvents.slice(0, 3).map((event) => <div key={event.id} className={`truncate rounded border px-1.5 py-1 text-[10px] font-bold sm:text-xs ${EVENT_TYPE_STYLES[event.event_type]}`}>[{EVENT_TYPE_LABELS[event.event_type]}] {event.profile?.display_name} {event.title}{event.status === "pending" ? " (대기)" : ""}</div>)}
-                        {dayEvents.length > 3 && <div className="text-[11px] font-bold text-slate-500">외 {dayEvents.length - 3}건</div>}
+                        {types.map((type) => {
+                          const count = dayEvents.filter((event) => event.event_type === type).length;
+                          if (count === 0) return null;
+                          return (
+                            <div key={type} className={`rounded border px-1.5 py-1 text-[10px] font-bold sm:text-xs ${EVENT_TYPE_STYLES[type]}`}>
+                              {EVENT_TYPE_LABELS[type]} {count}건
+                            </div>
+                          );
+                        })}
                       </div>
                     </button>
                   );

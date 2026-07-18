@@ -2,9 +2,9 @@
 
 import { X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
-import { EVENT_TYPE_OPTIONS } from "@/lib/constants";
+import { EVENT_SUBTYPE_OPTIONS, EVENT_TYPE_LABELS, EVENT_TYPE_OPTIONS } from "@/lib/constants";
 import { parseJsonResponse } from "@/lib/utils";
-import type { CalendarEvent } from "@/types";
+import type { CalendarEvent, EventType } from "@/types";
 
 export function EventEditModal({
   event,
@@ -18,6 +18,8 @@ export function EventEditModal({
   onSaved: () => void;
 }) {
   const [allDay, setAllDay] = useState(event.all_day);
+  const [eventType, setEventType] = useState<EventType>(event.event_type);
+  const [title, setTitle] = useState(event.title);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -27,6 +29,16 @@ export function EventEditModal({
     return () => window.removeEventListener("keydown", close);
   }, [onClose]);
 
+  function changeEventType(nextType: EventType) {
+    setEventType(nextType);
+    const subtypeOptions = EVENT_SUBTYPE_OPTIONS[nextType];
+    if (subtypeOptions) {
+      setTitle(subtypeOptions.includes(title) ? title : subtypeOptions[0]);
+    } else if (EVENT_SUBTYPE_OPTIONS[eventType]?.includes(title)) {
+      setTitle("");
+    }
+  }
+
   async function submit(formEvent: FormEvent<HTMLFormElement>) {
     formEvent.preventDefault();
     setLoading(true);
@@ -35,8 +47,8 @@ export function EventEditModal({
     const payload = {
       action: "update",
       reason: form.get("reason"),
-      eventType: form.get("eventType"),
-      title: form.get("title"),
+      eventType,
+      title,
       startDate: form.get("startDate"),
       endDate: form.get("endDate"),
       allDay,
@@ -62,6 +74,8 @@ export function EventEditModal({
     }
   }
 
+  const subtypeOptions = EVENT_SUBTYPE_OPTIONS[eventType];
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={(e) => e.currentTarget === e.target && onClose()}>
       <form onSubmit={submit} className="card max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5" role="dialog" aria-modal="true">
@@ -73,12 +87,20 @@ export function EventEditModal({
           <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-slate-100" aria-label="닫기"><X /></button>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <label className="text-sm font-bold">종류
-            <select name="eventType" defaultValue={event.event_type} className="input mt-1">
+          <label className="text-sm font-bold">표시 항목
+            <select name="eventType" value={eventType} onChange={(e) => changeEventType(e.target.value as EventType)} className="input mt-1">
               {EVENT_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
-          <label className="text-sm font-bold">제목<input name="title" defaultValue={event.title} className="input mt-1" required maxLength={100} /></label>
+          <label className="text-sm font-bold">종류
+            {subtypeOptions ? (
+              <select name="title" value={title} onChange={(e) => setTitle(e.target.value)} className="input mt-1">
+                {subtypeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+            ) : (
+              <input name="title" value={title} onChange={(e) => setTitle(e.target.value)} className="input mt-1" required maxLength={100} placeholder={`${EVENT_TYPE_LABELS[eventType]} 종류 입력`} />
+            )}
+          </label>
           <label className="text-sm font-bold">시작일<input name="startDate" type="date" defaultValue={event.start_date} className="input mt-1" required /></label>
           <label className="text-sm font-bold">종료일<input name="endDate" type="date" defaultValue={event.end_date} className="input mt-1" required /></label>
           <label className="flex items-center gap-2 text-sm font-bold md:col-span-2"><input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} /> 종일 일정</label>

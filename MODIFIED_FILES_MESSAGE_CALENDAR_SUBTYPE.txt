@@ -1,0 +1,21 @@
+이번 수정 파일
+
+lib/constants.ts
+components/calendar/CalendarBoard.tsx
+components/calendar/EventFormModal.tsx
+components/calendar/EventEditModal.tsx
+components/calendar/MyEventsDetail.tsx
+components/admin/ApprovalList.tsx
+components/usage/UsageDetail.tsx
+components/usage/UsageUserList.tsx
+components/messages/MessageList.tsx
+app/api/events/route.ts
+app/api/events/[id]/route.ts
+app/api/admin/approvals/[id]/route.ts
+app/api/admin/event-change-requests/[id]/route.ts
+app/api/messages/route.ts
+app/login/page.tsx
+app/layout.tsx
+supabase/schema.sql
+supabase/migration_20260718_message_retention_event_subtypes.sql
+APPLY_MESSAGE_CALENDAR_SUBTYPE_UPDATE.md

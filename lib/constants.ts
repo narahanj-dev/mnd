@@ -1,7 +1,7 @@
 import type { EventStatus, EventType, UserRole } from "@/types";
 
 export const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
-  { value: "leave", label: "연가" },
+  { value: "leave", label: "휴가" },
   { value: "overnight", label: "외박" },
   { value: "weekend_outing", label: "주말외출" },
   { value: "weekday_outing", label: "평일외출" },
@@ -11,7 +11,7 @@ export const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
 export const EVENT_TYPE_VALUES = ["leave", "overnight", "weekend_outing", "weekday_outing", "anniversary"] as const;
 
 export const EVENT_TYPE_LABELS: Record<EventType, string> = {
-  leave: "연가",
+  leave: "휴가",
   overnight: "외박",
   weekend_outing: "주말외출",
   weekday_outing: "평일외출",
@@ -48,3 +48,21 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
 
 export const DEPARTMENTS = ["교향악대", "관악대", "전통악대", "팡파르대", "대대본부"] as const;
 
+
+export const LEAVE_SUBTYPE_OPTIONS = ["연가", "포상", "위로", "청원"] as const;
+export const OVERNIGHT_SUBTYPE_OPTIONS = ["정기외박", "포상외박"] as const;
+
+export const EVENT_SUBTYPE_OPTIONS: Partial<Record<EventType, readonly string[]>> = {
+  leave: LEAVE_SUBTYPE_OPTIONS,
+  overnight: OVERNIGHT_SUBTYPE_OPTIONS,
+};
+
+export function formatEventLabel(eventType: EventType, title: string | null | undefined) {
+  const normalizedTitle = title?.trim();
+  return normalizedTitle ? `${EVENT_TYPE_LABELS[eventType]}(${normalizedTitle})` : EVENT_TYPE_LABELS[eventType];
+}
+
+export function isValidEventTitle(eventType: EventType, title: string) {
+  const options = EVENT_SUBTYPE_OPTIONS[eventType];
+  return !options || options.includes(title);
+}

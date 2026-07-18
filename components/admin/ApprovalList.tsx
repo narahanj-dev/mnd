@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Building2, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { EVENT_TYPE_LABELS } from "@/lib/constants";
+import { formatEventLabel } from "@/lib/constants";
 import { parseJsonResponse } from "@/lib/utils";
 import type { CalendarEvent, EventChangeRequest, UserRole } from "@/types";
 
@@ -177,7 +177,7 @@ export function ApprovalList() {
                   <article key={event.id} className="card p-5">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
-                        <div className="font-black">[{EVENT_TYPE_LABELS[event.event_type]}] {event.title}</div>
+                        <div className="font-black">[{formatEventLabel(event.event_type, event.title)}]</div>
                         <p className="mt-2 text-sm text-slate-600">신청자 {event.profile?.display_name} · {event.profile?.department}</p>
                         <p className="text-sm text-slate-600">{event.start_date} ~ {event.end_date} · {event.all_day ? "종일" : `${event.start_time?.slice(0, 5)}~${event.end_time?.slice(0, 5)}`}</p>
                         {event.description && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">{event.description}</p>}
@@ -205,17 +205,17 @@ export function ApprovalList() {
                     <article key={request.id} className="card p-5">
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="min-w-0 flex-1">
-                          <div className="font-black">[{request.request_type === "update" ? "수정" : "삭제"} 요청] {event.title}</div>
+                          <div className="font-black">[{request.request_type === "update" ? "수정" : "삭제"} 요청] {formatEventLabel(event.event_type, event.title)}</div>
                           <p className="mt-2 text-sm text-slate-600">요청자 {request.requester?.display_name ?? event.profile?.display_name} · {request.requester?.department ?? event.profile?.department}</p>
                           <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">
                             <strong>현재 일정</strong><br />
-                            [{EVENT_TYPE_LABELS[event.event_type]}] {event.title}<br />
+                            [{formatEventLabel(event.event_type, event.title)}]<br />
                             {event.start_date} ~ {event.end_date} · {event.all_day ? "종일" : `${event.start_time?.slice(0, 5)}~${event.end_time?.slice(0, 5)}`}
                           </div>
                           {request.request_type === "update" && request.proposed_event_type && (
                             <div className="mt-2 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
                               <strong>변경 요청 내용</strong><br />
-                              [{EVENT_TYPE_LABELS[request.proposed_event_type]}] {request.proposed_title}<br />
+                              [{formatEventLabel(request.proposed_event_type, request.proposed_title)}]<br />
                               {request.proposed_start_date} ~ {request.proposed_end_date} · {request.proposed_all_day ? "종일" : `${request.proposed_start_time?.slice(0, 5)}~${request.proposed_end_time?.slice(0, 5)}`}
                             </div>
                           )}

@@ -4,7 +4,7 @@ import { ArrowLeft, CalendarDays, Check, Filter, X } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useCallback, useMemo, useState } from "react";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { EVENT_TYPE_LABELS, EVENT_TYPE_STYLES, USER_ROLE_LABELS } from "@/lib/constants";
+import { EVENT_TYPE_STYLES, USER_ROLE_LABELS, formatEventLabel } from "@/lib/constants";
 import { parseJsonResponse } from "@/lib/utils";
 import type {
   CalendarEvent,
@@ -32,7 +32,7 @@ type DetailResponse = {
 };
 
 const FILTER_OPTIONS: { value: UsageEventType; label: string }[] = [
-  { value: "leave", label: "연가" },
+  { value: "leave", label: "휴가" },
   { value: "overnight", label: "외박" },
   { value: "weekend_outing", label: "외출" },
   { value: "weekday_outing", label: "평일외출" },
@@ -325,9 +325,8 @@ export function MyEventsDetail({ userId }: { userId: string }) {
                           <span
                             className={`rounded-full border px-2.5 py-1 text-xs font-black ${EVENT_TYPE_STYLES[event.event_type]}`}
                           >
-                            {EVENT_TYPE_LABELS[event.event_type]}
+                            {formatEventLabel(event.event_type, event.title)}
                           </span>
-                          <strong className="text-lg">{event.title}</strong>
                           <StatusBadge status={event.status} />
                         </div>
                         <p className="mt-3 text-sm text-slate-600">
@@ -397,7 +396,9 @@ export function MyEventsDetail({ userId }: { userId: string }) {
                                   {request.request_type === "update" && (
                                     <div className="mt-3 rounded-lg bg-white p-3 text-sm text-slate-700">
                                       <div className="font-bold">
-                                        [{request.proposed_event_type ? EVENT_TYPE_LABELS[request.proposed_event_type] : "종류 미지정"}] {request.proposed_title}
+                                        {request.proposed_event_type
+                                          ? `[${formatEventLabel(request.proposed_event_type, request.proposed_title)}]`
+                                          : "[종류 미지정]"}
                                       </div>
                                       <div className="mt-1">
                                         {request.proposed_start_date} ~ {request.proposed_end_date} · {request.proposed_all_day ? "종일" : `${request.proposed_start_time?.slice(0, 5)}~${request.proposed_end_time?.slice(0, 5)}`}

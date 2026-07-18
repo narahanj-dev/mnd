@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { requireUserManager, authErrorResponse, canManageUser } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { formatEventLabel } from "@/lib/constants";
 import type { Profile } from "@/types";
 
 const schema = z.object({
@@ -68,8 +69,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const requestLabel = changeRequest.request_type === "update" ? "수정" : "삭제";
     const resultLabel = approved ? "승인" : "거절";
     const content = approved
-      ? `일정 '${changeRequest.event.title}'의 ${requestLabel} 요청이 승인되었습니다.`
-      : `일정 '${changeRequest.event.title}'의 ${requestLabel} 요청이 거절되었습니다. 기존 일정은 그대로 유지됩니다.\n거절 사유: ${parsed.data.reason}`;
+      ? `일정 '${formatEventLabel(changeRequest.event.event_type, changeRequest.event.title)}'의 ${requestLabel} 요청이 승인되었습니다.`
+      : `일정 '${formatEventLabel(changeRequest.event.event_type, changeRequest.event.title)}'의 ${requestLabel} 요청이 거절되었습니다. 기존 일정은 그대로 유지됩니다.\n거절 사유: ${parsed.data.reason}`;
     const { error: messageError } = await admin.from("messages").insert({
       sender_id: user.id,
       recipient_id: changeRequest.requester_id,

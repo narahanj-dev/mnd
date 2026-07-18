@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { requireUserManager, authErrorResponse, canManageUser } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { formatEventLabel } from "@/lib/constants";
 import type { Profile } from "@/types";
 
 const schema = z.object({ decision: z.enum(["approve", "reject"]), reason: z.string().max(1000).optional() });
@@ -52,8 +53,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       related_event_id: event.id,
       title: approved ? "일정 승인 안내" : "일정 거절 안내",
       content: approved
-        ? `등록한 일정 '${event.title}' (${event.start_date}~${event.end_date})이 승인되었습니다.`
-        : `등록한 일정 '${event.title}' (${event.start_date}~${event.end_date})이 거절되었습니다.\n거절 사유: ${parsed.data.reason}`,
+        ? `등록한 일정 '${formatEventLabel(event.event_type, event.title)}' (${event.start_date}~${event.end_date})이 승인되었습니다.`
+        : `등록한 일정 '${formatEventLabel(event.event_type, event.title)}' (${event.start_date}~${event.end_date})이 거절되었습니다.\n거절 사유: ${parsed.data.reason}`,
       message_type: approved ? "event_approved" : "event_rejected",
     });
 

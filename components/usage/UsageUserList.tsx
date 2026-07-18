@@ -122,7 +122,7 @@ export function UsageUserList() {
   const title = viewerRole === "user" ? "내 사용현황" : `${selectedDepartment} 사용현황`;
   const description =
     viewerRole === "user"
-      ? "본인의 연가·외박·외출 사용현황을 확인할 수 있습니다."
+      ? "본인의 휴가·외박·외출 사용현황을 확인할 수 있습니다."
       : `${selectedDepartment} 소속 인원을 선택해 상세 사용현황을 확인하세요.`;
 
   return (

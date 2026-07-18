@@ -3,7 +3,7 @@
 import { ArrowLeft, CalendarDays, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { EVENT_TYPE_STYLES, USER_ROLE_LABELS } from "@/lib/constants";
+import { EVENT_TYPE_STYLES, USER_ROLE_LABELS, formatEventLabel } from "@/lib/constants";
 import { parseJsonResponse } from "@/lib/utils";
 import type { UsageCategorySummary, UsageDetailResponse } from "@/types";
 
@@ -153,7 +153,7 @@ export function UsageDetail({ userId }: { userId: string }) {
                   {selected.events.map((event) => (
                     <article key={event.id} className="rounded-xl border border-slate-200 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-2">
-                        <strong className="text-base">{event.title}</strong>
+                        <strong className="text-base">{formatEventLabel(event.event_type, event.title)}</strong>
                         <span className="text-sm font-black text-blue-700">{event.dates.length}일</span>
                       </div>
                       <p className="mt-2 text-sm text-slate-600">

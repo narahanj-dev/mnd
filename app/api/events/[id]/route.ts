@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { requireUser, authErrorResponse } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { EVENT_TYPE_VALUES } from "@/lib/constants";
+import { EVENT_TYPE_VALUES, formatEventLabel, isValidEventTitle } from "@/lib/constants";
 import type { EventType } from "@/types";
 
 const schema = z.object({
@@ -52,6 +52,7 @@ function buildUpdate(current: EventRow, value: z.infer<typeof schema>) {
 }
 
 function validateUpdate(update: ReturnType<typeof buildUpdate>) {
+  if (!isValidEventTitle(update.event_type, update.title)) return "선택한 표시 항목의 종류를 확인하세요.";
   if (update.end_date < update.start_date) return "종료일은 시작일보다 빠를 수 없습니다.";
   if (!update.all_day && (!update.start_time || !update.end_time || update.end_time <= update.start_time)) {
     return "시간 일정을 올바르게 입력하세요.";
@@ -82,7 +83,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           recipient_id: current.user_id,
           related_event_id: current.id,
           title: "관리자 일정 삭제 안내",
-          content: `관리자가 일정 '${current.title}' (${current.start_date}~${current.end_date})을 삭제했습니다.\n처리 사유: ${parsed.data.reason}`,
+          content: `관리자가 일정 '${formatEventLabel(current.event_type, current.title)}' (${current.start_date}~${current.end_date})을 삭제했습니다.\n처리 사유: ${parsed.data.reason}`,
           message_type: "event_admin_deleted",
         });
         if (messageError) return Response.json({ error: messageError.message }, { status: 400 });
@@ -99,7 +100,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         recipient_id: current.user_id,
         related_event_id: current.id,
         title: "관리자 일정 수정 안내",
-        content: `관리자가 일정 '${current.title}'을 수정했습니다.\n변경 일정: '${update.title}' (${update.start_date}~${update.end_date})\n처리 사유: ${parsed.data.reason}`,
+        content: `관리자가 일정 '${formatEventLabel(current.event_type, current.title)}'을 수정했습니다.\n변경 일정: '${formatEventLabel(update.event_type, update.title)}' (${update.start_date}~${update.end_date})\n처리 사유: ${parsed.data.reason}`,
         message_type: "event_admin_updated",
       });
       if (messageError) return Response.json({ error: messageError.message }, { status: 400 });
@@ -151,7 +152,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         recipient_id: recipient.id,
         related_event_id: current.id,
         title: `일정 ${requestLabel} 승인 요청`,
-        content: `사용자가 일정 '${current.title}' (${current.start_date}~${current.end_date})의 ${requestLabel}을 요청했습니다.\n요청 사유: ${parsed.data.reason}`,
+        content: `사용자가 일정 '${formatEventLabel(current.event_type, current.title)}' (${current.start_date}~${current.end_date})의 ${requestLabel}을 요청했습니다.\n요청 사유: ${parsed.data.reason}`,
         message_type: parsed.data.action === "update" ? "event_update_requested" : "event_delete_requested",
       })));
       if (messageError) return Response.json({ error: messageError.message }, { status: 400 });

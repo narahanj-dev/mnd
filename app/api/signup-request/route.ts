@@ -5,7 +5,6 @@ import { DEPARTMENTS } from "@/lib/constants";
 const schema = z.object({
   name: z.string().min(1).max(50),
   department: z.enum(DEPARTMENTS),
-  contact: z.string().min(1).max(100),
   birthDate: z.string().date(),
   requestedLoginId: z.string().regex(/^[A-Za-z0-9_-]{4,30}$/),
   reason: z.string().max(500).optional(),
@@ -22,7 +21,6 @@ export async function POST(request: Request) {
     const { error } = await admin.from("signup_requests").insert({
       name: parsed.data.name,
       department: parsed.data.department,
-      contact: parsed.data.contact,
       birth_date: parsed.data.birthDate,
       requested_login_id: parsed.data.requestedLoginId,
       reason: parsed.data.reason || null,

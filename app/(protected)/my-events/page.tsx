@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { MyEventsList } from "@/components/calendar/MyEventsList";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/types";
+import { decryptProfile } from "@/lib/security/pii";
 
 export default async function MyEventsPage() {
   const supabase = await createClient();
@@ -9,11 +10,12 @@ export default async function MyEventsPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: profile } = await supabase
+  const { data: rawProfile } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user!.id)
-    .single<Profile>();
+    .single();
+  const profile = decryptProfile(rawProfile) as Profile | null;
 
   if (profile?.role === "user") {
     redirect(`/my-events/${user!.id}`);

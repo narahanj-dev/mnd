@@ -1,5 +1,6 @@
 import { authErrorResponse, canManageUser, requireUser } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { decryptProfile } from "@/lib/security/pii";
 import type { CalendarEvent, EventChangeRequest, Profile, UsageUserSummary } from "@/types";
 
 const MY_EVENT_TYPES = ["leave", "overnight", "weekend_outing", "weekday_outing"] as const;
@@ -41,11 +42,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     }
 
     const admin = createAdminClient();
-    const { data: target, error: targetError } = await admin
+    const { data: rawTarget, error: targetError } = await admin
       .from("profiles")
       .select("id,login_id,display_name,department,role,account_status")
       .eq("id", id)
-      .maybeSingle<TargetProfile>();
+      .maybeSingle();
+    const target = decryptProfile(rawTarget) as TargetProfile | null;
 
     if (targetError) return Response.json({ error: targetError.message }, { status: 400 });
     if (!target || target.account_status !== "active") {

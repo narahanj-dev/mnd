@@ -1,11 +1,10 @@
 import { z } from "zod";
-import {
-  requireAdmin,
-  requireUser,
-  authErrorResponse,
-} from "@/lib/auth/guards";
+import { requireAdmin, requireUser, authErrorResponse } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DEPARTMENTS, loginIdToEmail } from "@/lib/constants";
+import { DEPARTMENTS } from "@/lib/constants";
+import { decryptProfile, decryptProfiles, encryptProfileValues, loginIdHash, loginIdToAuthEmail, sanitizedAuthUserMetadata } from "@/lib/security/pii";
+import { validatePassword } from "@/lib/security/password-policy";
+import { recordPassword } from "@/lib/security/password-history";
 import type { Profile } from "@/types";
 
 export async function GET(request: Request) {
@@ -14,79 +13,41 @@ export async function GET(request: Request) {
     const admin = createAdminClient();
 
     if (profile.role === "user") {
-      const { data: ownProfile, error } = await admin
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single<Profile>();
-
-      if (error || !ownProfile) {
-        return Response.json(
-          { error: error?.message ?? "사용자 정보를 찾을 수 없습니다." },
-          { status: 404 },
-        );
-      }
-
+      const { data: rawOwnProfile, error } = await admin.from("profiles").select("*").eq("id", user.id).single();
+      const ownProfile = decryptProfile(rawOwnProfile) as Profile | null;
+      if (error || !ownProfile) return Response.json({ error: error?.message ?? "사용자 정보를 찾을 수 없습니다." }, { status: 404 });
       return Response.json({
-        users: [ownProfile],
-        departments: [],
-        selectedDepartment: profile.department,
-        currentUserId: user.id,
-        currentUserRole: profile.role,
-        currentUserDepartment: profile.department,
+        users: [ownProfile], departments: [], selectedDepartment: profile.department,
+        currentUserId: user.id, currentUserRole: profile.role, currentUserDepartment: profile.department,
       });
     }
 
-    const requestedDepartment =
-      new URL(request.url).searchParams.get("department")?.trim() || null;
-    const allowedDepartments =
-      profile.role === "admin" ? [...DEPARTMENTS] : [profile.department];
-
-    if (
-      requestedDepartment &&
-      !allowedDepartments.includes(requestedDepartment)
-    ) {
-      return Response.json(
-        { error: "이 부서의 사용자를 관리할 권한이 없습니다." },
-        { status: 403 },
-      );
+    const requestedDepartment = new URL(request.url).searchParams.get("department")?.trim() || null;
+    const allowedDepartments = profile.role === "admin" ? [...DEPARTMENTS] : [profile.department];
+    if (requestedDepartment && !allowedDepartments.includes(requestedDepartment)) {
+      return Response.json({ error: "이 부서의 사용자를 관리할 권한이 없습니다." }, { status: 403 });
     }
 
-    const { data: departmentRows, error: departmentError } = await admin
-      .from("profiles")
-      .select("department")
-      .eq("account_status", "active")
-      .in("department", allowedDepartments);
-
-    if (departmentError)
-      return Response.json({ error: departmentError.message }, { status: 400 });
-
+    const { data: departmentRows, error: departmentError } = await admin.from("profiles").select("department").eq("account_status", "active").in("department", allowedDepartments);
+    if (departmentError) return Response.json({ error: departmentError.message }, { status: 400 });
     const departments = allowedDepartments.map((name) => ({
       name,
-      userCount: (departmentRows ?? []).filter(
-        (item) => item.department === name,
-      ).length,
+      userCount: (departmentRows ?? []).filter((item) => item.department === name).length,
     }));
 
     let users: Profile[] = [];
     if (requestedDepartment) {
-      const { data, error } = await admin
-        .from("profiles")
-        .select("*")
-        .eq("department", requestedDepartment)
-        .order("display_name", { ascending: true });
-      if (error)
-        return Response.json({ error: error.message }, { status: 400 });
-      users = (data ?? []) as Profile[];
+      let query = admin.from("profiles").select("*").eq("department", requestedDepartment).eq("account_status", "active");
+      if (profile.role === "department_admin") query = query.neq("role", "admin");
+      const { data, error } = await query;
+      if (error) return Response.json({ error: error.message }, { status: 400 });
+      users = decryptProfiles(data as Record<string, unknown>[]).map((item) => item as unknown as Profile)
+        .sort((a, b) => a.display_name.localeCompare(b.display_name, "ko"));
     }
 
     return Response.json({
-      users,
-      departments,
-      selectedDepartment: requestedDepartment,
-      currentUserId: user.id,
-      currentUserRole: profile.role,
-      currentUserDepartment: profile.department,
+      users, departments, selectedDepartment: requestedDepartment,
+      currentUserId: user.id, currentUserRole: profile.role, currentUserDepartment: profile.department,
     });
   } catch (error) {
     return authErrorResponse(error);
@@ -95,8 +56,8 @@ export async function GET(request: Request) {
 
 const schema = z.object({
   loginId: z.string().regex(/^[A-Za-z0-9_-]{4,30}$/),
-  password: z.string().min(4).max(100),
-  displayName: z.string().min(1).max(50),
+  password: z.string().min(1).max(100),
+  displayName: z.string().trim().min(1).max(50),
   department: z.enum(DEPARTMENTS),
   role: z.enum(["user", "department_admin", "admin"]).default("user"),
 });
@@ -105,56 +66,55 @@ export async function POST(request: Request) {
   try {
     await requireAdmin();
     const parsed = schema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) {
-      return Response.json(
-        { error: "계정 입력값을 확인하세요." },
-        { status: 400 },
-      );
-    }
+    if (!parsed.success) return Response.json({ error: "계정 입력값을 확인하세요." }, { status: 400 });
+
+    const policyError = validatePassword(parsed.data.password, {
+      loginId: parsed.data.loginId,
+      displayName: parsed.data.displayName,
+    });
+    if (policyError) return Response.json({ error: policyError }, { status: 400 });
 
     const admin = createAdminClient();
+    const { data: duplicate } = await admin.from("profiles").select("id").eq("login_id_hash", loginIdHash(parsed.data.loginId)).maybeSingle();
+    if (duplicate) return Response.json({ error: "이미 사용 중인 아이디입니다." }, { status: 409 });
+
     const { data, error } = await admin.auth.admin.createUser({
-      email: loginIdToEmail(parsed.data.loginId),
+      email: loginIdToAuthEmail(parsed.data.loginId),
       password: parsed.data.password,
       email_confirm: true,
       app_metadata: { role: parsed.data.role },
-      user_metadata: {
-        login_id: parsed.data.loginId,
-        display_name: parsed.data.displayName,
-        department: parsed.data.department,
-        must_change_password: true,
-      },
+      user_metadata: sanitizedAuthUserMetadata(true),
     });
+    if (error || !data.user) return Response.json({ error: error?.message ?? "사용자 생성 실패" }, { status: 400 });
 
-    if (error || !data.user) {
-      return Response.json(
-        { error: error?.message ?? "사용자 생성 실패" },
-        { status: 400 },
-      );
-    }
-
+    const now = new Date().toISOString();
     const { error: profileError } = await admin.from("profiles").upsert({
       id: data.user.id,
-      login_id: parsed.data.loginId,
-      display_name: parsed.data.displayName,
+      ...encryptProfileValues({ login_id: parsed.data.loginId, display_name: parsed.data.displayName }),
       department: parsed.data.department,
       role: parsed.data.role,
       account_status: "active",
       must_change_password: true,
+      password_changed_at: now,
     });
-
     if (profileError) {
       await admin.auth.admin.deleteUser(data.user.id);
       return Response.json({ error: profileError.message }, { status: 400 });
     }
 
+    try {
+      await recordPassword(admin, data.user.id, parsed.data.password);
+    } catch (historyError) {
+      await admin.auth.admin.deleteUser(data.user.id);
+      return Response.json({ error: historyError instanceof Error ? historyError.message : "비밀번호 이력 저장 실패" }, { status: 400 });
+    }
+
     await admin.from("messages").insert({
       recipient_id: data.user.id,
       title: "계정 생성 완료",
-      content: `아이디 ${parsed.data.loginId} 계정이 생성되었습니다. 첫 로그인 후 비밀번호를 변경하세요.`,
+      content: "계정이 생성되었습니다. 첫 로그인 후 비밀번호를 변경하세요.",
       message_type: "account_created",
     });
-
     return Response.json({ ok: true });
   } catch (error) {
     return authErrorResponse(error);

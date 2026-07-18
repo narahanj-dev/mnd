@@ -82,7 +82,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           recipient_id: current.user_id,
           related_event_id: current.id,
           title: "관리자 일정 삭제 안내",
-          content: `관리자가 일정 '${current.title}' (${current.start_date}~${current.end_date})을 삭제했습니다.\n처리 사유: ${parsed.data.reason}\n처리 관리자: ${profile.display_name}`,
+          content: `관리자가 일정 '${current.title}' (${current.start_date}~${current.end_date})을 삭제했습니다.\n처리 사유: ${parsed.data.reason}`,
           message_type: "event_admin_deleted",
         });
         if (messageError) return Response.json({ error: messageError.message }, { status: 400 });
@@ -99,7 +99,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         recipient_id: current.user_id,
         related_event_id: current.id,
         title: "관리자 일정 수정 안내",
-        content: `관리자가 일정 '${current.title}'을 수정했습니다.\n변경 일정: '${update.title}' (${update.start_date}~${update.end_date})\n처리 사유: ${parsed.data.reason}\n처리 관리자: ${profile.display_name}`,
+        content: `관리자가 일정 '${current.title}'을 수정했습니다.\n변경 일정: '${update.title}' (${update.start_date}~${update.end_date})\n처리 사유: ${parsed.data.reason}`,
         message_type: "event_admin_updated",
       });
       if (messageError) return Response.json({ error: messageError.message }, { status: 400 });
@@ -151,7 +151,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         recipient_id: recipient.id,
         related_event_id: current.id,
         title: `일정 ${requestLabel} 승인 요청`,
-        content: `${profile.display_name}님이 일정 '${current.title}' (${current.start_date}~${current.end_date})의 ${requestLabel}을 요청했습니다.\n요청 사유: ${parsed.data.reason}`,
+        content: `사용자가 일정 '${current.title}' (${current.start_date}~${current.end_date})의 ${requestLabel}을 요청했습니다.\n요청 사유: ${parsed.data.reason}`,
         message_type: parsed.data.action === "update" ? "event_update_requested" : "event_delete_requested",
       })));
       if (messageError) return Response.json({ error: messageError.message }, { status: 400 });

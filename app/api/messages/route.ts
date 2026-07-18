@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { requireAdmin, requireUser, authErrorResponse } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { decryptProfileRelation } from "@/lib/security/pii";
 
 export async function GET(request: Request) {
   try {
@@ -12,7 +13,11 @@ export async function GET(request: Request) {
     if (unread) query = query.eq("is_read", false);
     const { data, error } = await query;
     if (error) return Response.json({ error: error.message }, { status: 400 });
-    return Response.json({ messages: data ?? [] });
+    const messages = (data ?? []).map((message) => ({
+      ...message,
+      sender: decryptProfileRelation(message.sender as Record<string, unknown> | Record<string, unknown>[] | null),
+    }));
+    return Response.json({ messages });
   } catch (error) { return authErrorResponse(error); }
 }
 

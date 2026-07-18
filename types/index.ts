@@ -19,7 +19,8 @@ export interface Profile {
   role: UserRole;
   account_status: AccountStatus;
   must_change_password: boolean;
-  birth_date: string | null;
+  birth_month_day: string | null;
+  password_changed_at: string | null;
   created_at: string;
   updated_at: string;
   last_login_at: string | null;

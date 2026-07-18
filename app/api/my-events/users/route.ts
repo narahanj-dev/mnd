@@ -2,6 +2,7 @@ import { authErrorResponse, requireUser } from "@/lib/auth/guards";
 import { DEPARTMENTS } from "@/lib/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { UsageUserSummary } from "@/types";
+import { decryptProfile, decryptProfiles } from "@/lib/security/pii";
 
 type DepartmentRow = {
   department: string;
@@ -19,12 +20,12 @@ export async function GET(request: Request) {
         .select("id,login_id,display_name,department,role")
         .eq("id", user.id)
         .eq("account_status", "active")
-        .maybeSingle<UsageUserSummary>();
+        .maybeSingle();
 
       if (error) return Response.json({ error: error.message }, { status: 400 });
 
       return Response.json({
-        users: data ? [data] : [],
+        users: data ? [decryptProfile(data) as unknown as UsageUserSummary] : [],
         departments: [],
         selectedDepartment: profile.department,
         viewerRole: profile.role,
@@ -64,16 +65,16 @@ export async function GET(request: Request) {
         .from("profiles")
         .select("id,login_id,display_name,department,role")
         .eq("account_status", "active")
-        .eq("department", requestedDepartment)
-        .order("display_name", { ascending: true });
+        .eq("department", requestedDepartment);
 
       if (profile.role === "department_admin") {
         usersQuery = usersQuery.neq("role", "admin");
       }
 
-      const { data, error } = await usersQuery.returns<UsageUserSummary[]>();
+      const { data, error } = await usersQuery;
       if (error) return Response.json({ error: error.message }, { status: 400 });
-      users = data ?? [];
+      users = decryptProfiles(data as Record<string, unknown>[]).map((item) => item as unknown as UsageUserSummary)
+        .sort((a, b) => a.display_name.localeCompare(b.display_name, "ko"));
     }
 
     return Response.json({

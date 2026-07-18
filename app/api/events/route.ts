@@ -3,6 +3,7 @@ import { requireUser, authErrorResponse } from "@/lib/auth/guards";
 import { DEPARTMENTS, EVENT_TYPE_VALUES } from "@/lib/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { CalendarEvent } from "@/types";
+import { decryptProfile, decryptProfileRelation, maskDisplayName } from "@/lib/security/pii";
 
 const createSchema = z.object({
   eventType: z.enum(EVENT_TYPE_VALUES),
@@ -17,8 +18,8 @@ const createSchema = z.object({
   adminNote: z.string().max(500).nullable().optional(),
 });
 
-function birthdayDate(year: number, birthDate: string) {
-  const [, month, day] = birthDate.split("-");
+function birthdayDate(year: number, monthDay: string) {
+  const [month, day] = monthDay.split("-");
   const value = `${year}-${month}-${day}`;
   const date = new Date(`${value}T00:00:00Z`);
   return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? null : value;
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
       query,
       admin
         .from("profiles")
-        .select("id,display_name,department,birth_date,role")
+        .select("id,display_name,department,birth_month_day,role")
         .eq("account_status", "active")
         .in("department", allowedDepartments),
     ]);
@@ -59,24 +60,34 @@ export async function GET(request: Request) {
     if (error) return Response.json({ error: error.message }, { status: 400 });
     if (profileCountError) return Response.json({ error: profileCountError.message }, { status: 400 });
 
+    const decryptedActiveProfiles = (activeProfiles ?? []).map((item) => decryptProfile(item));
+
     const departmentCounts = Object.fromEntries(
       allowedDepartments.map((department) => [
         department,
-        (activeProfiles ?? []).filter((item) => item.department === department).length,
+        decryptedActiveProfiles.filter((item) => item.department === department).length,
       ]),
     );
 
-    const events = ((data ?? []) as CalendarEvent[]).filter((event) =>
-      allowedDepartments.includes(eventDepartment(event)),
-    );
+    const events = ((data ?? []) as CalendarEvent[]).map((event) => {
+      const relation = decryptProfileRelation(event.profile as Record<string, unknown> | Record<string, unknown>[] | null);
+      const eventProfile = Array.isArray(relation) ? relation[0] : relation;
+      return {
+        ...event,
+        profile: eventProfile ? {
+          ...eventProfile,
+          display_name: maskDisplayName(String(eventProfile.display_name ?? "사용자")),
+        } : undefined,
+      } as CalendarEvent;
+    }).filter((event) => allowedDepartments.includes(eventDepartment(event)));
 
     if (view === "calendar" && start && end) {
       const startYear = Number(start.slice(0, 4));
       const endYear = Number(end.slice(0, 4));
-      for (const birthdayProfile of activeProfiles ?? []) {
-        if (!birthdayProfile.birth_date) continue;
+      for (const birthdayProfile of decryptedActiveProfiles) {
+        if (!birthdayProfile.birth_month_day) continue;
         for (let year = startYear; year <= endYear; year += 1) {
-          const date = birthdayDate(year, birthdayProfile.birth_date);
+          const date = birthdayDate(year, String(birthdayProfile.birth_month_day));
           if (!date || date < start || date > end) continue;
           events.push({
             id: `birthday-${birthdayProfile.id}-${year}`,
@@ -99,7 +110,7 @@ export async function GET(request: Request) {
             updated_at: `${year}-01-01T00:00:00.000Z`,
             is_system_generated: true,
             profile: {
-              display_name: birthdayProfile.display_name,
+              display_name: maskDisplayName(String(birthdayProfile.display_name)),
               department: birthdayProfile.department,
               role: birthdayProfile.role,
             },

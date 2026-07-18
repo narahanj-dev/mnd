@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 
 const envPath = path.join(process.cwd(), '.env.local');
 if (fs.existsSync(envPath)) {
@@ -16,10 +17,17 @@ const supabase = createClient(
   { auth: { persistSession: false } },
 );
 
-const { data: profiles } = await supabase.from('profiles').select('*').in('login_id', ['12345', '11111', '22222']);
-const admin = profiles?.find((p) => p.login_id === '12345');
-const user1 = profiles?.find((p) => p.login_id === '11111');
-const user2 = profiles?.find((p) => p.login_id === '22222');
+const hashKeyRaw = process.env.PII_HASH_KEY;
+if (!hashKeyRaw) throw new Error('PII_HASH_KEY가 필요합니다.');
+const decoded = Buffer.from(hashKeyRaw, 'base64');
+const hashKey = decoded.length === 32 ? decoded : crypto.createHash('sha256').update(hashKeyRaw).digest();
+const loginHash = (value) => crypto.createHmac('sha256', hashKey).update(`login-id:${value.trim().normalize('NFKC').toLocaleLowerCase('en-US')}`).digest('hex');
+const ids = [process.env.INITIAL_ADMIN_ID, process.env.TEST_USER_1_ID, process.env.TEST_USER_2_ID];
+if (ids.some((value) => !value)) throw new Error('INITIAL_ADMIN_ID, TEST_USER_1_ID, TEST_USER_2_ID가 필요합니다.');
+const { data: profiles } = await supabase.from('profiles').select('*').in('login_id_hash', ids.map(loginHash));
+const admin = profiles?.find((p) => p.login_id_hash === loginHash(ids[0]));
+const user1 = profiles?.find((p) => p.login_id_hash === loginHash(ids[1]));
+const user2 = profiles?.find((p) => p.login_id_hash === loginHash(ids[2]));
 if (!admin || !user1 || !user2) throw new Error('먼저 npm run create-admin을 실행하세요.');
 
 const today = new Date();

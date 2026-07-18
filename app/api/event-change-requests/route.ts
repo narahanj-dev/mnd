@@ -1,5 +1,6 @@
 import { requireUser, authErrorResponse } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { decryptProfileRelation } from "@/lib/security/pii";
 
 export async function GET(request: Request) {
   try {
@@ -15,6 +16,17 @@ export async function GET(request: Request) {
     if (status === "pending" || status === "approved" || status === "rejected") query = query.eq("status", status);
     const { data, error } = await query;
     if (error) return Response.json({ error: error.message }, { status: 400 });
-    return Response.json({ requests: data ?? [] });
+    const requests = (data ?? []).map((item) => {
+      const eventRelation = Array.isArray(item.event) ? item.event[0] : item.event;
+      return {
+        ...item,
+        requester: decryptProfileRelation(item.requester as Record<string, unknown> | Record<string, unknown>[] | null),
+        event: eventRelation ? {
+          ...eventRelation,
+          profile: decryptProfileRelation(eventRelation.profile as Record<string, unknown> | Record<string, unknown>[] | null),
+        } : eventRelation,
+      };
+    });
+    return Response.json({ requests });
   } catch (error) { return authErrorResponse(error); }
 }

@@ -1,6 +1,7 @@
 import { authErrorResponse, requireUser } from "@/lib/auth/guards";
 import { EVENT_TYPE_LABELS } from "@/lib/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { decryptProfile } from "@/lib/security/pii";
 import type {
   EventType,
   Profile,
@@ -51,11 +52,12 @@ export async function GET(
     const { id } = await context.params;
     const admin = createAdminClient();
 
-    const { data: target, error: targetError } = await admin
+    const { data: rawTarget, error: targetError } = await admin
       .from("profiles")
       .select("id,login_id,display_name,department,role,account_status")
       .eq("id", id)
-      .maybeSingle<Pick<Profile, "id" | "login_id" | "display_name" | "department" | "role" | "account_status">>();
+      .maybeSingle();
+    const target = decryptProfile(rawTarget) as Pick<Profile, "id" | "login_id" | "display_name" | "department" | "role" | "account_status"> | null;
 
     if (targetError) {
       return Response.json({ error: targetError.message }, { status: 400 });

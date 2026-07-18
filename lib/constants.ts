@@ -48,8 +48,3 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
 
 export const DEPARTMENTS = ["교향악대", "관악대", "전통악대", "팡파르대", "대대본부"] as const;
 
-export const LOGIN_EMAIL_DOMAIN = "leave-calendar.local";
-
-export function loginIdToEmail(loginId: string) {
-  return `${loginId.trim()}@${LOGIN_EMAIL_DOMAIN}`;
-}

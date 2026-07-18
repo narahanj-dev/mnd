@@ -2,6 +2,7 @@ import { requireUserManager, authErrorResponse, canManageUser } from "@/lib/auth
 import { DEPARTMENTS } from "@/lib/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { CalendarEvent, EventChangeRequest, Profile } from "@/types";
+import { decryptProfileRelation } from "@/lib/security/pii";
 
 type ManagedProfile = Pick<Profile, "id" | "department" | "role">;
 
@@ -60,8 +61,21 @@ export async function GET(request: Request) {
     if (eventError) return Response.json({ error: eventError.message }, { status: 400 });
     if (requestError) return Response.json({ error: requestError.message }, { status: 400 });
 
-    const events = (eventData ?? []) as CalendarEvent[];
-    const requests = ((requestData ?? []) as EventChangeRequest[]).filter((changeRequest) => {
+    const events = ((eventData ?? []) as CalendarEvent[]).map((event) => ({
+      ...event,
+      profile: decryptProfileRelation(event.profile as Record<string, unknown> | Record<string, unknown>[] | null),
+    })) as CalendarEvent[];
+    const requests = ((requestData ?? []) as EventChangeRequest[]).map((changeRequest) => {
+      const event = changeRequest.event ? {
+        ...changeRequest.event,
+        profile: decryptProfileRelation(changeRequest.event.profile as Record<string, unknown> | Record<string, unknown>[] | null),
+      } : undefined;
+      return {
+        ...changeRequest,
+        event,
+        requester: decryptProfileRelation(changeRequest.requester as Record<string, unknown> | Record<string, unknown>[] | null),
+      } as EventChangeRequest;
+    }).filter((changeRequest) => {
       const targetProfile = changeRequest.event?.profile ?? changeRequest.requester;
       return Boolean(targetProfile && canManageUser(profile, targetProfile));
     });

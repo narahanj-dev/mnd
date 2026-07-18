@@ -78,7 +78,7 @@ export function UsageDetail({ userId }: { userId: string }) {
         <div>
           <h1 className="text-2xl font-black">{data.user.display_name} 사용현황</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {data.user.department} · {USER_ROLE_LABELS[data.user.role]} · 군번 {data.user.login_id}
+            {data.user.department} · {USER_ROLE_LABELS[data.user.role]} · 아이디 {data.user.login_id}
           </p>
         </div>
         <p className="text-xs text-slate-400">승인 완료된 일정만 집계됩니다.</p>

@@ -1,0 +1,3 @@
+-- Auth 사용자는 scripts/create-initial-users.mjs가 생성합니다.
+-- 이 파일은 선택 사항인 예시 일정/쪽지용입니다.
+-- 초기 사용자 생성 후 npm run seed-demo를 실행하는 방법을 README에서 안내합니다.

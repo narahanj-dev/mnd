@@ -52,8 +52,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       related_event_id: event.id,
       title: approved ? "일정 승인 안내" : "일정 거절 안내",
       content: approved
-        ? `등록한 일정 '${event.title}' (${event.start_date}~${event.end_date})이 승인되었습니다.\n처리 관리자: ${profile.display_name}`
-        : `등록한 일정 '${event.title}' (${event.start_date}~${event.end_date})이 거절되었습니다.\n거절 사유: ${parsed.data.reason}\n처리 관리자: ${profile.display_name}`,
+        ? `등록한 일정 '${event.title}' (${event.start_date}~${event.end_date})이 승인되었습니다.`
+        : `등록한 일정 '${event.title}' (${event.start_date}~${event.end_date})이 거절되었습니다.\n거절 사유: ${parsed.data.reason}`,
       message_type: approved ? "event_approved" : "event_rejected",
     });
 

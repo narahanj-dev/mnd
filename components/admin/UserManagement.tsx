@@ -164,21 +164,21 @@ export function UserManagement() {
   async function resetPassword(user: Profile) {
     if (
       !window.confirm(
-        `${user.display_name}님의 비밀번호를 12345로 초기화하시겠습니까?`,
+        `${user.display_name}님의 비밀번호를 강력한 임시 비밀번호로 초기화하시겠습니까?`,
       )
     )
       return;
     setBusyId(user.id);
     setMessage("");
     try {
-      await parseJsonResponse(
+      const result = await parseJsonResponse<{ temporaryPassword: string }>(
         await fetch(`/api/admin/users/${user.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "resetPassword" }),
         }),
       );
-      setMessage(`${user.display_name}님의 비밀번호를 12345로 초기화했습니다.`);
+      setMessage(`${user.display_name}님의 임시 비밀번호: ${result.temporaryPassword} (한 번만 전달하고 별도로 저장하지 마세요.)`);
       await load(selectedDepartment);
     } catch (error) {
       setMessage(
@@ -488,6 +488,7 @@ export function UserManagement() {
             <input
               name="password"
               type="password"
+              minLength={9}
               className="input"
               placeholder="임시 비밀번호"
               required

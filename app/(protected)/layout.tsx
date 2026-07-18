@@ -1,8 +1,11 @@
 import { Header } from "@/components/common/Header";
+import { PasswordChangeGate } from "@/components/auth/PasswordChangeGate";
 import { canManageUser } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/types";
+import { decryptProfile } from "@/lib/security/pii";
+import { passwordExpired } from "@/lib/security/password-history";
 import { redirect } from "next/navigation";
 
 type ApprovalTargetRelation = Pick<Profile, "department" | "role"> | Pick<Profile, "department" | "role">[] | null;
@@ -17,7 +20,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single<Profile>();
+  const { data: rawProfile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+  const profile = decryptProfile(rawProfile) as Profile | null;
   if (!profile || profile.account_status !== "active") redirect("/login");
 
   const { count: unreadCount } = await supabase
@@ -55,9 +59,11 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   }
 
   return (
-    <div className="min-h-screen">
-      <Header profile={profile} unreadCount={unreadCount ?? 0} pendingCount={pendingCount} />
-      <main className="mx-auto max-w-[1500px] px-4 py-6">{children}</main>
-    </div>
+    <PasswordChangeGate required={profile.must_change_password || passwordExpired(profile.password_changed_at)}>
+      <div className="min-h-screen">
+        <Header profile={profile} unreadCount={unreadCount ?? 0} pendingCount={pendingCount} />
+        <main className="mx-auto max-w-[1500px] px-4 py-6">{children}</main>
+      </div>
+    </PasswordChangeGate>
   );
 }

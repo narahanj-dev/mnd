@@ -1,6 +1,7 @@
 import { AdminSettingsForm } from "@/components/admin/AdminSettingsForm";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/types";
+import { decryptProfile } from "@/lib/security/pii";
 import { redirect } from "next/navigation";
 
 export default async function SettingsPage() {
@@ -8,11 +9,12 @@ export default async function SettingsPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const { data: rawProfile } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
-    .single<Profile>();
+    .single();
+  const profile = decryptProfile(rawProfile) as Profile | null;
 
   if (!profile || profile.role !== "admin" || profile.account_status !== "active") {
     redirect("/calendar");

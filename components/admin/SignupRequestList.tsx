@@ -9,7 +9,7 @@ type RequestItem = {
   id: string;
   name: string;
   department: string;
-  birth_date: string;
+  birth_month_day: string;
   requested_login_id: string;
   reason: string | null;
   status: "pending" | "approved" | "rejected";
@@ -62,7 +62,7 @@ export function SignupRequestList() {
     if (decision === "approve") {
       const loginId = prompt("발급할 아이디", item.requested_login_id)?.trim();
       if (!loginId) return;
-      const password = prompt("임시 비밀번호(4자 이상)")?.trim();
+      const password = prompt("임시 비밀번호(9자 이상, 영문 대/소문자·숫자·특수문자 중 3종류 이상)")?.trim();
       if (!password) return;
       body = { ...body, loginId, password };
     } else {
@@ -151,7 +151,7 @@ export function SignupRequestList() {
             <div className="flex flex-wrap justify-between gap-4">
               <div>
                 <div className="font-black">{item.name} · {item.department}</div>
-                <p className="mt-1 text-sm text-slate-600">생년월일 {item.birth_date} · 희망 아이디 {item.requested_login_id}</p>
+                <p className="mt-1 text-sm text-slate-600">생일 {item.birth_month_day} · 희망 아이디 {item.requested_login_id}</p>
                 {item.reason && <p className="mt-2 text-sm">신청 사유: {item.reason}</p>}
                 <p className="mt-2 text-xs text-slate-400">{new Date(item.created_at).toLocaleString("ko-KR")}</p>
               </div>

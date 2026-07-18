@@ -3,12 +3,18 @@
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameMonth, isToday, startOfMonth, startOfWeek } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DEPARTMENTS, EVENT_TYPE_LABELS, EVENT_TYPE_OPTIONS, EVENT_TYPE_STYLES } from "@/lib/constants";
+import { DEPARTMENTS, EVENT_TYPE_LABELS, EVENT_TYPE_STYLES } from "@/lib/constants";
 import { parseJsonResponse } from "@/lib/utils";
 import type { CalendarEvent, EventType, Profile } from "@/types";
 import { EventFormModal } from "./EventFormModal";
 
-const types: EventType[] = EVENT_TYPE_OPTIONS.map((option) => option.value);
+const calendarDisplayOrder: EventType[] = [
+  "leave",
+  "overnight",
+  "weekend_outing",
+  "weekday_outing",
+  "anniversary",
+];
 
 type CalendarResponse = {
   events: CalendarEvent[];
@@ -77,7 +83,7 @@ export function CalendarBoard({ profile }: { profile: Profile }) {
       <section className="card sticky top-[73px] z-30 mb-5 p-4">
         <div className="flex flex-wrap items-center gap-4">
           <strong className="text-sm">표시 항목</strong>
-          {types.map((type) => <label key={type} className="flex items-center gap-1.5 text-sm font-semibold"><input type="checkbox" checked={enabled[type]} onChange={(e) => setEnabled((value) => ({ ...value, [type]: e.target.checked }))} /> {EVENT_TYPE_LABELS[type]}</label>)}
+          {calendarDisplayOrder.map((type) => <label key={type} className="flex items-center gap-1.5 text-sm font-semibold"><input type="checkbox" checked={enabled[type]} onChange={(e) => setEnabled((value) => ({ ...value, [type]: e.target.checked }))} /> {EVENT_TYPE_LABELS[type]}</label>)}
           <select
             className="input max-w-44 py-2"
             value={department}
@@ -126,10 +132,10 @@ export function CalendarBoard({ profile }: { profile: Profile }) {
                       ? "bg-slate-50 text-slate-300 hover:bg-blue-50"
                       : "bg-white hover:bg-blue-50";
                   return (
-                    <button key={iso} onClick={() => setSelectedDate(iso)} className={`min-h-28 border-r border-t border-slate-200 p-1.5 text-left align-top sm:min-h-32 ${dayCellStyle}`}>
-                      <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold ${isToday(day) ? "bg-blue-700 text-white" : day.getDay() === 0 ? "text-rose-600" : day.getDay() === 6 ? "text-blue-600" : ""}`}>{format(day, "d")}</span>
-                      <div className="mt-1 space-y-1">
-                        {types.map((type) => {
+                    <button key={iso} onClick={() => setSelectedDate(iso)} className={`flex min-h-28 flex-col items-stretch justify-start border-r border-t border-slate-200 p-1.5 text-left sm:min-h-32 ${dayCellStyle}`}>
+                      <span className={`inline-flex h-7 w-7 shrink-0 self-start items-center justify-center rounded-full text-sm font-bold ${isToday(day) ? "bg-blue-700 text-white" : day.getDay() === 0 ? "text-rose-600" : day.getDay() === 6 ? "text-blue-600" : ""}`}>{format(day, "d")}</span>
+                      <div className="mt-1 w-full space-y-1">
+                        {calendarDisplayOrder.map((type) => {
                           const count = dayEvents.filter((event) => event.event_type === type).length;
                           if (count === 0) return null;
                           return (

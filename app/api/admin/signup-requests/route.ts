@@ -24,9 +24,15 @@ export async function GET(request: Request) {
 
     let requests: Record<string, unknown>[] = [];
     if (requestedDepartment) {
-      const { data, error } = await admin.from("signup_requests").select("*").eq("status", "pending").eq("department", requestedDepartment).order("created_at", { ascending: false });
+      const { data, error } = await admin.from("signup_requests").select("id,name,department,birth_month_day,requested_login_id,requested_password,reason,status,rejection_reason,created_at").eq("status", "pending").eq("department", requestedDepartment).order("created_at", { ascending: false });
       if (error) return Response.json({ error: error.message }, { status: 400 });
-      requests = (data ?? []).map((item) => decryptSignupRequest(item));
+      requests = (data ?? []).map((item) => {
+        const { requested_password: requestedPassword, ...safeItem } = item;
+        return {
+          ...decryptSignupRequest(safeItem),
+          has_password: Boolean(requestedPassword),
+        };
+      });
     }
 
     return Response.json({ requests, departments, selectedDepartment: requestedDepartment, viewerRole: profile.role, viewerDepartment: profile.department });

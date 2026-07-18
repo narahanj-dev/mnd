@@ -11,6 +11,7 @@ type RequestItem = {
   department: string;
   birth_month_day: string;
   requested_login_id: string;
+  has_password: boolean;
   reason: string | null;
   status: "pending" | "approved" | "rejected";
   rejection_reason: string | null;
@@ -62,9 +63,7 @@ export function SignupRequestList() {
     if (decision === "approve") {
       const loginId = prompt("발급할 아이디", item.requested_login_id)?.trim();
       if (!loginId) return;
-      const password = prompt("임시 비밀번호(9자 이상, 영문 대/소문자·숫자·특수문자 중 3종류 이상)")?.trim();
-      if (!password) return;
-      body = { ...body, loginId, password };
+      body = { ...body, loginId };
     } else {
       const reason = prompt("거절 사유")?.trim();
       if (!reason) return;
@@ -152,11 +151,16 @@ export function SignupRequestList() {
               <div>
                 <div className="font-black">{item.name} · {item.department}</div>
                 <p className="mt-1 text-sm text-slate-600">생일 {item.birth_month_day} · 희망 아이디 {item.requested_login_id}</p>
+                {item.has_password ? (
+                  <p className="mt-1 text-xs font-bold text-emerald-700">신청자 비밀번호 설정 완료</p>
+                ) : (
+                  <p className="mt-1 text-xs font-bold text-rose-700">업데이트 전 신청: 거절 후 재신청 필요</p>
+                )}
                 {item.reason && <p className="mt-2 text-sm">신청 사유: {item.reason}</p>}
                 <p className="mt-2 text-xs text-slate-400">{new Date(item.created_at).toLocaleString("ko-KR")}</p>
               </div>
               <div className="flex gap-2">
-                <button className="btn-primary" onClick={() => void decide(item, "approve")}>승인</button>
+                <button className="btn-primary" disabled={!item.has_password} title={!item.has_password ? "기존 신청은 재신청이 필요합니다." : undefined} onClick={() => void decide(item, "approve")}>승인</button>
                 <button className="btn-danger" onClick={() => void decide(item, "reject")}>거절</button>
               </div>
             </div>

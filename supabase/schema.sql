@@ -31,6 +31,7 @@ create table public.signup_requests (
   birth_month_day text not null, -- MM-DD AES-256-GCM 암호문
   requested_login_id text not null, -- AES-256-GCM 암호문
   requested_login_id_hash text not null,
+  requested_password text not null, -- 승인 전까지만 보관하는 AES-256-GCM 암호문
   reason text, -- AES-256-GCM 암호문
   status public.request_status not null default 'pending',
   rejection_reason text,

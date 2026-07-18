@@ -1,14 +1,13 @@
 import { z } from "zod";
 import { authErrorResponse, requireUserManager } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { decryptSignupRequest, encryptProfileValues, loginIdHash, loginIdToAuthEmail, sanitizedAuthUserMetadata } from "@/lib/security/pii";
+import { decryptSignupRequest, decryptSignupRequestPassword, encryptProfileValues, loginIdHash, loginIdToAuthEmail, sanitizedAuthUserMetadata } from "@/lib/security/pii";
 import { validatePassword } from "@/lib/security/password-policy";
 import { recordPassword } from "@/lib/security/password-history";
 
 const schema = z.object({
   decision: z.enum(["approve", "reject"]),
   loginId: z.string().regex(/^[A-Za-z0-9_-]{4,30}$/).optional(),
-  password: z.string().max(100).optional(),
   reason: z.string().max(1000).optional(),
 });
 
@@ -37,9 +36,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
 
     const loginId = parsed.data.loginId?.trim() || String(signupRequest.requested_login_id);
-    const password = parsed.data.password || "";
+    const password = decryptSignupRequestPassword(rawRequest);
+    if (!password) {
+      return Response.json({ error: "기존 가입신청에는 설정된 비밀번호가 없습니다. 해당 신청을 거절한 뒤 다시 신청하도록 안내하세요." }, { status: 400 });
+    }
+
     const policyError = validatePassword(password, { loginId, displayName: String(signupRequest.name) });
-    if (policyError) return Response.json({ error: policyError }, { status: 400 });
+    if (policyError) return Response.json({ error: `신청자가 설정한 비밀번호를 사용할 수 없습니다. ${policyError}` }, { status: 400 });
     if (!signupRequest.birth_month_day) return Response.json({ error: "생일 월/일이 없는 신청입니다." }, { status: 400 });
 
     const hash = loginIdHash(loginId);
@@ -50,7 +53,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       email: loginIdToAuthEmail(loginId),
       password,
       email_confirm: true,
-      user_metadata: sanitizedAuthUserMetadata(true),
+      user_metadata: sanitizedAuthUserMetadata(false),
       app_metadata: { role: "user" },
     });
     if (error || !data.user) return Response.json({ error: error?.message ?? "계정 생성 실패" }, { status: 400 });
@@ -62,7 +65,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       department: signupRequest.department,
       role: "user",
       account_status: "active",
-      must_change_password: true,
+      must_change_password: false,
       password_changed_at: now,
     });
     if (profileError) {

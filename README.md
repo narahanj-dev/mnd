@@ -7,11 +7,12 @@ Next.js와 Supabase 기반의 부서 공동 연차·외박·외출 일정 관리
 - 아이디, 이름, 생일 월/일을 AES-256-GCM 암호문으로 DB에 저장
 - 로그인·중복검색은 비밀키 기반 HMAC 해시 사용
 - Supabase Auth 내부 이메일에 아이디 원문을 사용하지 않음
-- 비밀번호는 Supabase Auth의 단방향 해시 저장 사용
+- 회원가입 승인 전 비밀번호는 AES-256-GCM 암호문으로 임시 보관하고, 승인 후 Supabase Auth의 단방향 해시로 저장
 - 최근 비밀번호 5개 재사용 금지 및 6개월 변경주기 강제
 - 회원가입 시 출생연도 미수집, 월/일만 암호화 저장
 - 달력 이름 마스킹 적용
 - 관리자·부서관리자·일반사용자 권한 분리
+- 로그인 후 300초 카운트다운 및 만료 시 자동 로그아웃
 
 ## 설치
 
@@ -40,7 +41,8 @@ npm run create-admin
 
 ## 기존 Supabase 프로젝트 업데이트
 
-상세 순서는 `APPLY_SECURITY_UPDATE.md`를 따르세요.
+개인정보 암호화 상세 순서는 `APPLY_SECURITY_UPDATE.md`를 따르세요.
+회원가입 비밀번호와 자동 로그아웃 추가 적용은 `APPLY_SIGNUP_PASSWORD_TIMER_UPDATE.md`를 따르세요.
 
 1. `supabase/migration_20260718_pii_encryption_password_policy.sql`
 2. 수정 코드 배포

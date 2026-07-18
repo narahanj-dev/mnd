@@ -144,6 +144,7 @@ export function decryptProfileRelation<T>(relation: T): T {
 export function encryptSignupRequestValues(values: {
   name?: string;
   requested_login_id?: string;
+  requested_password?: string;
   birth_month_day?: string;
   reason?: string | null;
 }) {
@@ -152,6 +153,9 @@ export function encryptSignupRequestValues(values: {
   if (values.requested_login_id !== undefined) {
     result.requested_login_id = encryptPii(values.requested_login_id);
     result.requested_login_id_hash = loginIdHash(values.requested_login_id);
+  }
+  if (values.requested_password !== undefined) {
+    result.requested_password = encryptPii(values.requested_password);
   }
   if (values.birth_month_day !== undefined) {
     result.birth_month_day = encryptPii(birthMonthDay(values.birth_month_day));
@@ -170,4 +174,12 @@ export function decryptSignupRequest<T>(row: T): T {
     ...(typeof value.birth_month_day === "string" ? { birth_month_day: decryptPii(value.birth_month_day) } : {}),
     ...(typeof value.reason === "string" ? { reason: decryptPii(value.reason) } : {}),
   } as T;
+}
+
+export function decryptSignupRequestPassword(row: unknown) {
+  if (!row || typeof row !== "object") return null;
+  const value = row as Row;
+  return typeof value.requested_password === "string"
+    ? decryptPii(value.requested_password)
+    : null;
 }

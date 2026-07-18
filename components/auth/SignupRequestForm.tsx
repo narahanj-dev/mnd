@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEPARTMENTS } from "@/lib/constants";
+import { PASSWORD_POLICY_TEXT } from "@/lib/security/password-policy";
 import { parseJsonResponse } from "@/lib/utils";
 
 export function SignupRequestForm() {
@@ -15,6 +16,15 @@ export function SignupRequestForm() {
     setLoading(true);
     setError("");
     const form = new FormData(event.currentTarget);
+    const password = String(form.get("password") || "");
+    const confirmPassword = String(form.get("confirmPassword") || "");
+
+    if (password !== confirmPassword) {
+      setError("비밀번호 확인이 일치하지 않습니다.");
+      setLoading(false);
+      return;
+    }
+
     try {
       await parseJsonResponse(await fetch("/api/signup-request", {
         method: "POST",
@@ -43,7 +53,13 @@ export function SignupRequestForm() {
         </div>
       </fieldset>
       <label className="block text-sm font-bold">소속 부서<select name="department" className="input mt-1" required defaultValue=""><option value="" disabled>부서를 선택하세요</option>{DEPARTMENTS.map((department) => <option key={department} value={department}>{department}</option>)}</select></label>
-      <label className="block text-sm font-bold">희망 아이디<input name="requestedLoginId" className="input mt-1" required minLength={4} maxLength={30} pattern="[A-Za-z0-9_-]{4,30}" /></label>
+      <label className="block text-sm font-bold">희망 아이디<input name="requestedLoginId" className="input mt-1" required minLength={4} maxLength={30} pattern="[A-Za-z0-9_-]{4,30}" autoComplete="username" /></label>
+      <div className="rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+        <p className="font-bold">{PASSWORD_POLICY_TEXT}</p>
+        <p className="mt-1">연속 문자열, 전화번호형 숫자열, 잘 알려진 단어, 아이디 또는 이름이 포함된 비밀번호는 사용할 수 없습니다.</p>
+      </div>
+      <label className="block text-sm font-bold">비밀번호<input name="password" type="password" className="input mt-1" required minLength={9} maxLength={100} autoComplete="new-password" /></label>
+      <label className="block text-sm font-bold">비밀번호 확인<input name="confirmPassword" type="password" className="input mt-1" required minLength={9} maxLength={100} autoComplete="new-password" /></label>
       <label className="block text-sm font-bold">신청 사유<textarea name="reason" className="input mt-1 min-h-28" maxLength={500} /></label>
       {error && <p className="text-sm font-semibold text-rose-700">{error}</p>}
       <div className="flex justify-end gap-2"><button type="button" onClick={() => router.back()} className="btn-secondary">취소</button><button className="btn-primary" disabled={loading}>{loading ? "접수 중..." : "신청하기"}</button></div>

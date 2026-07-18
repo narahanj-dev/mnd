@@ -13,6 +13,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Profile } from "@/types";
+import { SessionTimeout } from "@/components/auth/SessionTimeout";
 
 const baseLinks = [
   { href: "/calendar", label: "달력", icon: CalendarDays },
@@ -106,6 +107,7 @@ export function Header({
             );
           })}
         </nav>
+        <SessionTimeout />
         <div className="hidden text-right text-xs text-slate-500 md:block">
           <div className="font-bold text-slate-800">{profile.display_name}</div>
           <div>{profile.department}</div>

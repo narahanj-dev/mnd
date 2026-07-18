@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DEPARTMENTS } from "@/lib/constants";
 import { birthMonthDay, encryptSignupRequestValues, loginIdHash } from "@/lib/security/pii";
+import { validatePassword } from "@/lib/security/password-policy";
 
 const schema = z.object({
   name: z.string().trim().min(1).max(50),
@@ -9,6 +10,8 @@ const schema = z.object({
   birthMonth: z.coerce.number().int().min(1).max(12),
   birthDay: z.coerce.number().int().min(1).max(31),
   requestedLoginId: z.string().trim().regex(/^[A-Za-z0-9_-]{4,30}$/),
+  password: z.string().min(1).max(100),
+  confirmPassword: z.string().min(1).max(100),
   reason: z.string().trim().max(500).optional(),
 });
 
@@ -17,6 +20,15 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return Response.json({ error: "입력 내용을 확인하세요. 아이디는 영문·숫자·밑줄·하이픈 4~30자입니다." }, { status: 400 });
   }
+  if (parsed.data.password !== parsed.data.confirmPassword) {
+    return Response.json({ error: "비밀번호 확인이 일치하지 않습니다." }, { status: 400 });
+  }
+
+  const policyError = validatePassword(parsed.data.password, {
+    loginId: parsed.data.requestedLoginId,
+    displayName: parsed.data.name,
+  });
+  if (policyError) return Response.json({ error: policyError }, { status: 400 });
 
   let monthDay: string;
   try {
@@ -40,6 +52,7 @@ export async function POST(request: Request) {
       ...encryptSignupRequestValues({
         name: parsed.data.name,
         requested_login_id: parsed.data.requestedLoginId,
+        requested_password: parsed.data.password,
         birth_month_day: monthDay,
         reason: parsed.data.reason || null,
       }),

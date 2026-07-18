@@ -7,6 +7,7 @@ import {
   USER_ROLE_LABELS,
   USER_ROLE_OPTIONS,
 } from "@/lib/constants";
+import { PASSWORD_POLICY_TEXT } from "@/lib/security/password-policy";
 import { parseJsonResponse } from "@/lib/utils";
 import type { Profile, UserRole } from "@/types";
 
@@ -32,6 +33,9 @@ export function UserManagement() {
   const [currentUserDepartment, setCurrentUserDepartment] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<Profile | null>(null);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
   const [deleteUser, setDeleteUser] = useState<Profile | null>(null);
   const [deleteLoginId, setDeleteLoginId] = useState("");
   const [deleteError, setDeleteError] = useState("");
@@ -161,6 +165,46 @@ export function UserManagement() {
     }
   }
 
+  async function changeOwnPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const currentPassword = String(form.get("currentPassword") || "");
+    const password = String(form.get("password") || "");
+    const confirmPassword = String(form.get("confirmPassword") || "");
+
+    if (password !== confirmPassword) {
+      setPasswordError("새 비밀번호 확인이 일치하지 않습니다.");
+      return;
+    }
+
+    setPasswordBusy(true);
+    setPasswordError("");
+    setMessage("");
+    try {
+      await parseJsonResponse(
+        await fetch("/api/auth/change-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPassword, password }),
+        }),
+      );
+      setPasswordOpen(false);
+      setMessage(
+        "비밀번호를 변경했습니다. 다음 로그인부터 새 비밀번호를 사용하세요.",
+      );
+      formElement.reset();
+    } catch (error) {
+      setPasswordError(
+        error instanceof Error
+          ? error.message
+          : "비밀번호 변경에 실패했습니다.",
+      );
+    } finally {
+      setPasswordBusy(false);
+    }
+  }
+
   async function resetPassword(user: Profile) {
     if (
       !window.confirm(
@@ -178,7 +222,9 @@ export function UserManagement() {
           body: JSON.stringify({ action: "resetPassword" }),
         }),
       );
-      setMessage(`${user.display_name}님의 임시 비밀번호는 ${result.temporaryPassword}입니다. 로그인 후 반드시 새 비밀번호로 변경해야 합니다.`);
+      setMessage(
+        `${user.display_name}님의 임시 비밀번호는 ${result.temporaryPassword}입니다. 로그인 후 반드시 새 비밀번호로 변경해야 합니다.`,
+      );
       await load(selectedDepartment);
     } catch (error) {
       setMessage(
@@ -320,7 +366,7 @@ export function UserManagement() {
               </h1>
               <p className="mt-1 text-sm text-slate-500">
                 {isSelfService
-                  ? "본인 계정 정보만 조회할 수 있으며 아이디만 직접 변경할 수 있습니다."
+                  ? "본인 계정 정보만 조회할 수 있으며 아이디와 비밀번호를 직접 변경할 수 있습니다."
                   : "부서 내에서 이름 또는 아이디로 검색할 수 있습니다. 삭제하면 관련 기록도 모두 삭제됩니다."}
               </p>
             </div>
@@ -423,6 +469,18 @@ export function UserManagement() {
                                 ? "아이디 변경"
                                 : "아이디·부서·권한 변경"}
                             </button>
+                            {isSelfService && isCurrentUser && (
+                              <button
+                                className="btn-secondary text-xs disabled:cursor-not-allowed disabled:opacity-40"
+                                disabled={passwordBusy}
+                                onClick={() => {
+                                  setPasswordError("");
+                                  setPasswordOpen(true);
+                                }}
+                              >
+                                비밀번호 변경
+                              </button>
+                            )}
                             {!isSelfService && (
                               <>
                                 <button
@@ -581,8 +639,8 @@ export function UserManagement() {
                   </div>
                 </div>
                 <p className="rounded-xl bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800">
-                  일반사용자는 본인 아이디만 변경할 수 있습니다. 부서와 권한
-                  변경은 관리자에게 요청하세요.
+                  일반사용자는 본인 아이디와 비밀번호를 직접 변경할 수 있습니다.
+                  부서와 권한 변경은 관리자에게 요청하세요.
                 </p>
               </>
             ) : (
@@ -639,6 +697,102 @@ export function UserManagement() {
               </button>
               <button className="btn-primary" disabled={busyId === editUser.id}>
                 {busyId === editUser.id ? "변경 중..." : "변경 저장"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {passwordOpen && isSelfService && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !passwordBusy) {
+              setPasswordOpen(false);
+              setPasswordError("");
+            }
+          }}
+        >
+          <form
+            onSubmit={changeOwnPassword}
+            className="card w-full max-w-lg space-y-4 p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="self-password-change-title"
+          >
+            <div>
+              <h2
+                id="self-password-change-title"
+                className="text-xl font-black"
+              >
+                내 비밀번호 변경
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                변경을 완료하면 다음 로그인부터 새 비밀번호를 사용합니다.
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+              <p className="font-bold">{PASSWORD_POLICY_TEXT}</p>
+              <p className="mt-1">
+                연속 숫자, 전화번호, love·happy·password, qwerty·asdf,
+                아이디·이름이 포함된 비밀번호와 최근 비밀번호 5개는 사용할 수
+                없습니다.
+              </p>
+            </div>
+            <label className="block text-sm font-bold">
+              현재 비밀번호
+              <input
+                name="currentPassword"
+                type="password"
+                className="input mt-1"
+                maxLength={100}
+                autoComplete="current-password"
+                required
+              />
+            </label>
+            <label className="block text-sm font-bold">
+              새 비밀번호
+              <input
+                name="password"
+                type="password"
+                className="input mt-1"
+                minLength={9}
+                maxLength={100}
+                autoComplete="new-password"
+                required
+              />
+            </label>
+            <label className="block text-sm font-bold">
+              새 비밀번호 확인
+              <input
+                name="confirmPassword"
+                type="password"
+                className="input mt-1"
+                minLength={9}
+                maxLength={100}
+                autoComplete="new-password"
+                required
+              />
+            </label>
+            {passwordError && (
+              <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
+                {passwordError}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={passwordBusy}
+                onClick={() => {
+                  setPasswordOpen(false);
+                  setPasswordError("");
+                }}
+              >
+                취소
+              </button>
+              <button className="btn-primary" disabled={passwordBusy}>
+                {passwordBusy ? "변경 중..." : "비밀번호 변경"}
               </button>
             </div>
           </form>

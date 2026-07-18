@@ -41,6 +41,7 @@ export default async function LoginPage({
           </div>
           <ul className="mt-3 space-y-1.5 pl-5 text-sm font-semibold leading-6 text-amber-950 marker:text-amber-600">
             <li className="list-disc">회원가입 시 희망 아이디로 군번 및 숫자로만 이루어진 아이디는 사용할 수 없습니다.</li>
+            <li className="list-disc">기존 군번 가입자는 아이디에 본인 이름을 영어 자판으로 입력하고 초기 비밀번호를 사용해 로그인해 주세요.</li>
             <li className="list-disc">관리자가 비밀번호를 초기화하면 임시 비밀번호는 mnd890701!로 변경되며, 로그인 후 반드시 새 비밀번호로 변경해야 합니다.</li>
           </ul>
         </aside>

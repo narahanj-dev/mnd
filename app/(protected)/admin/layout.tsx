@@ -6,7 +6,20 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("profiles").select("role, account_status").eq("id", user.id).single<Pick<Profile, "role" | "account_status">>();
-  if (!profile || profile.role !== "admin" || profile.account_status !== "active") redirect("/calendar");
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, account_status")
+    .eq("id", user.id)
+    .single<Pick<Profile, "role" | "account_status">>();
+
+  if (
+    !profile ||
+    profile.account_status !== "active" ||
+    (profile.role !== "admin" && profile.role !== "department_admin")
+  ) {
+    redirect("/calendar");
+  }
+
   return children;
 }

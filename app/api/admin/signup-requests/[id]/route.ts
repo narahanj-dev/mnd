@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { requireAdmin, authErrorResponse } from "@/lib/auth/guards";
+import { authErrorResponse, requireUserManager } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loginIdToEmail } from "@/lib/constants";
 
@@ -12,29 +12,43 @@ const schema = z.object({
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const { user } = await requireAdmin();
+    const { profile } = await requireUserManager();
     const { id } = await context.params;
     const parsed = schema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return Response.json({ error: "요청을 확인하세요." }, { status: 400 });
+
     const admin = createAdminClient();
-    const { data: req } = await admin.from("signup_requests").select("*").eq("id", id).single();
-    if (!req || req.status !== "pending") return Response.json({ error: "대기 중인 신청이 아닙니다." }, { status: 404 });
+    const { data: req, error: requestError } = await admin
+      .from("signup_requests")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (requestError || !req || req.status !== "pending") {
+      return Response.json({ error: "대기 중인 신청이 아닙니다." }, { status: 404 });
+    }
+
+    if (profile.role === "department_admin" && req.department !== profile.department) {
+      return Response.json({ error: "다른 부서의 가입신청은 처리할 수 없습니다." }, { status: 403 });
+    }
 
     if (parsed.data.decision === "reject") {
-      if (!parsed.data.reason?.trim()) return Response.json({ error: "거절 사유를 입력하세요." }, { status: 400 });
-      await admin.from("signup_requests").update({
-        status: "rejected",
-        rejection_reason: parsed.data.reason,
-        processed_by: user.id,
-        processed_at: new Date().toISOString(),
-      }).eq("id", id);
+      if (!parsed.data.reason?.trim()) {
+        return Response.json({ error: "거절 사유를 입력하세요." }, { status: 400 });
+      }
+      const { error } = await admin.from("signup_requests").delete().eq("id", id);
+      if (error) return Response.json({ error: error.message }, { status: 400 });
       return Response.json({ ok: true });
     }
 
-    const loginId = parsed.data.loginId || req.requested_login_id;
+    const loginId = parsed.data.loginId?.trim() || req.requested_login_id;
     const password = parsed.data.password;
-    if (!password || password.length < 4) return Response.json({ error: "4자 이상의 임시 비밀번호를 입력하세요." }, { status: 400 });
-    if (!req.birth_date) return Response.json({ error: "생년월일이 없는 신청입니다. 신청 정보를 확인하세요." }, { status: 400 });
+    if (!password || password.length < 4) {
+      return Response.json({ error: "4자 이상의 임시 비밀번호를 입력하세요." }, { status: 400 });
+    }
+    if (!req.birth_date) {
+      return Response.json({ error: "생년월일이 없는 신청입니다. 신청 정보를 확인하세요." }, { status: 400 });
+    }
 
     const { data, error } = await admin.auth.admin.createUser({
       email: loginIdToEmail(loginId),
@@ -49,9 +63,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       },
       app_metadata: { role: "user" },
     });
-    if (error || !data.user) return Response.json({ error: error?.message ?? "계정 생성 실패" }, { status: 400 });
+    if (error || !data.user) {
+      return Response.json({ error: error?.message ?? "계정 생성 실패" }, { status: 400 });
+    }
 
-    await admin.from("profiles").upsert({
+    const { error: profileError } = await admin.from("profiles").upsert({
       id: data.user.id,
       login_id: loginId,
       display_name: req.name,
@@ -61,12 +77,20 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       account_status: "active",
       must_change_password: true,
     });
-    await admin.from("signup_requests").update({
-      status: "approved",
-      approved_user_id: data.user.id,
-      processed_by: user.id,
-      processed_at: new Date().toISOString(),
-    }).eq("id", id);
+
+    if (profileError) {
+      await admin.auth.admin.deleteUser(data.user.id);
+      return Response.json({ error: profileError.message }, { status: 400 });
+    }
+
+    const { error: deleteError } = await admin.from("signup_requests").delete().eq("id", id);
+    if (deleteError) {
+      await admin.auth.admin.deleteUser(data.user.id);
+      return Response.json({ error: deleteError.message }, { status: 400 });
+    }
+
     return Response.json({ ok: true });
-  } catch (error) { return authErrorResponse(error); }
+  } catch (error) {
+    return authErrorResponse(error);
+  }
 }

@@ -35,7 +35,7 @@ export function Header({
     profile.role === "admin"
       ? [...baseLinks, approvalLink, adminOnlyLinks[0], userManagementLink, adminOnlyLinks[1]]
       : profile.role === "department_admin"
-        ? [...baseLinks, approvalLink, userManagementLink]
+        ? [...baseLinks, approvalLink, adminOnlyLinks[0], userManagementLink]
         : baseLinks;
 
   async function logout() {

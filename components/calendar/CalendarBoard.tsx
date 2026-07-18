@@ -3,26 +3,33 @@
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameMonth, isToday, startOfMonth, startOfWeek } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EVENT_TYPE_LABELS, EVENT_TYPE_OPTIONS, EVENT_TYPE_STYLES } from "@/lib/constants";
+import { DEPARTMENTS, EVENT_TYPE_LABELS, EVENT_TYPE_OPTIONS, EVENT_TYPE_STYLES } from "@/lib/constants";
 import { parseJsonResponse } from "@/lib/utils";
 import type { CalendarEvent, EventType, Profile } from "@/types";
 import { EventFormModal } from "./EventFormModal";
 
 const types: EventType[] = EVENT_TYPE_OPTIONS.map((option) => option.value);
 
+type CalendarResponse = {
+  events: CalendarEvent[];
+  departmentCounts: Record<string, number>;
+};
+
 export function CalendarBoard({ profile }: { profile: Profile }) {
   const [months, setMonths] = useState(12);
   const [previousMonths, setPreviousMonths] = useState(0);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [departmentCounts, setDepartmentCounts] = useState<Record<string, number>>({});
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<Record<EventType, boolean>>({ leave: true, overnight: true, weekend_outing: true, weekday_outing: true, anniversary: true });
-  const [department, setDepartment] = useState("all");
+  const [department, setDepartment] = useState(profile.role === "admin" ? "all" : profile.department);
   const [userId, setUserId] = useState("all");
   const [myOnly, setMyOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const sentinel = useRef<HTMLDivElement>(null);
 
   const firstMonth = addMonths(startOfMonth(new Date()), -previousMonths);
+  const allowedDepartments = profile.role === "admin" ? [...DEPARTMENTS] : [profile.department];
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -31,13 +38,19 @@ export function CalendarBoard({ profile }: { profile: Profile }) {
       const rangeLastMonth = addMonths(startOfMonth(new Date()), months - 1);
       const start = format(startOfMonth(rangeFirstMonth), "yyyy-MM-dd");
       const end = format(endOfMonth(rangeLastMonth), "yyyy-MM-dd");
-      const data = await parseJsonResponse<{ events: CalendarEvent[] }>(await fetch(`/api/events?view=calendar&start=${start}&end=${end}`, { cache: "no-store" }));
+      const data = await parseJsonResponse<CalendarResponse>(
+        await fetch(`/api/events?view=calendar&start=${start}&end=${end}`, { cache: "no-store" }),
+      );
       setEvents(data.events);
-    } catch (error) { console.error(error); }
-    finally { setLoading(false); }
+      setDepartmentCounts(data.departmentCounts ?? {});
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   }, [previousMonths, months]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     const node = sentinel.current;
     if (!node) return;
@@ -48,11 +61,15 @@ export function CalendarBoard({ profile }: { profile: Profile }) {
   const profiles = useMemo(() => {
     const map = new Map<string, { id: string; name: string; department: string }>();
     events.forEach((event) => map.set(event.user_id, { id: event.user_id, name: event.profile?.display_name ?? "사용자", department: event.profile?.department ?? "미지정" }));
-    return [...map.values()];
-  }, [events]);
-  const departments = [...new Set(profiles.map((item) => item.department))];
+    return [...map.values()].filter((item) => department === "all" || item.department === department);
+  }, [department, events]);
 
-  const filtered = events.filter((event) => enabled[event.event_type] && (department === "all" || event.profile?.department === department) && (userId === "all" || event.user_id === userId) && (!myOnly || event.user_id === profile.id));
+  const departmentAndUserFiltered = events.filter((event) =>
+    (department === "all" || event.profile?.department === department) &&
+    (userId === "all" || event.user_id === userId) &&
+    (!myOnly || event.user_id === profile.id),
+  );
+  const filtered = departmentAndUserFiltered.filter((event) => enabled[event.event_type]);
   const visibleMonths = Array.from({ length: months + previousMonths }, (_, index) => addMonths(firstMonth, index));
 
   return (
@@ -61,11 +78,25 @@ export function CalendarBoard({ profile }: { profile: Profile }) {
         <div className="flex flex-wrap items-center gap-4">
           <strong className="text-sm">표시 항목</strong>
           {types.map((type) => <label key={type} className="flex items-center gap-1.5 text-sm font-semibold"><input type="checkbox" checked={enabled[type]} onChange={(e) => setEnabled((value) => ({ ...value, [type]: e.target.checked }))} /> {EVENT_TYPE_LABELS[type]}</label>)}
-          <select className="input max-w-44 py-2" value={department} onChange={(e) => setDepartment(e.target.value)}><option value="all">전체 부서</option>{departments.map((d) => <option key={d}>{d}</option>)}</select>
+          <select
+            className="input max-w-44 py-2"
+            value={department}
+            disabled={profile.role !== "admin"}
+            onChange={(e) => {
+              setDepartment(e.target.value);
+              setUserId("all");
+            }}
+          >
+            {profile.role === "admin" && <option value="all">전체 부서</option>}
+            {allowedDepartments.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
           <select className="input max-w-44 py-2" value={userId} onChange={(e) => setUserId(e.target.value)}><option value="all">전체 사용자</option>{profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
           <label className="flex items-center gap-1.5 text-sm font-semibold"><input type="checkbox" checked={myOnly} onChange={(e) => setMyOnly(e.target.checked)} /> 내 일정만</label>
           <button className="btn-secondary ml-auto text-sm" onClick={() => setPreviousMonths((value) => Math.min(value + 3, 12))}>이전 달 추가</button>
         </div>
+        {profile.role !== "admin" && (
+          <p className="mt-2 text-xs font-semibold text-slate-500">{profile.department} 부서 일정만 조회할 수 있습니다.</p>
+        )}
       </section>
 
       {loading && <p className="mb-4 text-sm font-semibold text-slate-500">달력을 불러오는 중...</p>}
@@ -96,7 +127,16 @@ export function CalendarBoard({ profile }: { profile: Profile }) {
         })}
       </div>
       <div ref={sentinel} className="h-12" />
-      {selectedDate && <EventFormModal date={selectedDate} events={filtered.filter((event) => event.start_date <= selectedDate && event.end_date >= selectedDate)} onClose={() => setSelectedDate(null)} onSaved={load} />}
+      {selectedDate && (
+        <EventFormModal
+          date={selectedDate}
+          events={filtered.filter((event) => event.start_date <= selectedDate && event.end_date >= selectedDate)}
+          selectedDepartment={department}
+          departmentCounts={departmentCounts}
+          onClose={() => setSelectedDate(null)}
+          onSaved={load}
+        />
+      )}
     </div>
   );
 }

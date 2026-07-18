@@ -3,21 +3,45 @@ import { requireAdmin, requireUserManager, authErrorResponse } from "@/lib/auth/
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DEPARTMENTS, loginIdToEmail } from "@/lib/constants";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const { user, profile } = await requireUserManager();
     const admin = createAdminClient();
-    let query = admin.from("profiles").select("*").order("created_at");
+    const requestedDepartment = new URL(request.url).searchParams.get("department")?.trim() || null;
+    const allowedDepartments = profile.role === "admin" ? [...DEPARTMENTS] : [profile.department];
 
-    if (profile.role === "department_admin") {
-      query = query.eq("department", profile.department);
+    if (requestedDepartment && !allowedDepartments.includes(requestedDepartment)) {
+      return Response.json({ error: "이 부서의 사용자를 관리할 권한이 없습니다." }, { status: 403 });
     }
 
-    const { data, error } = await query;
-    if (error) return Response.json({ error: error.message }, { status: 400 });
+    const { data: departmentRows, error: departmentError } = await admin
+      .from("profiles")
+      .select("department")
+      .eq("account_status", "active")
+      .in("department", allowedDepartments);
+
+    if (departmentError) return Response.json({ error: departmentError.message }, { status: 400 });
+
+    const departments = allowedDepartments.map((name) => ({
+      name,
+      userCount: (departmentRows ?? []).filter((item) => item.department === name).length,
+    }));
+
+    let users = [];
+    if (requestedDepartment) {
+      const { data, error } = await admin
+        .from("profiles")
+        .select("*")
+        .eq("department", requestedDepartment)
+        .order("display_name", { ascending: true });
+      if (error) return Response.json({ error: error.message }, { status: 400 });
+      users = data ?? [];
+    }
 
     return Response.json({
-      users: data ?? [],
+      users,
+      departments,
+      selectedDepartment: requestedDepartment,
       currentUserId: user.id,
       currentUserRole: profile.role,
       currentUserDepartment: profile.department,

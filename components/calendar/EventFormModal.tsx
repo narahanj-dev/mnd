@@ -1,12 +1,26 @@
 "use client";
 
 import { X } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { EVENT_TYPE_LABELS, EVENT_TYPE_OPTIONS } from "@/lib/constants";
 import { parseJsonResponse } from "@/lib/utils";
-import type { CalendarEvent } from "@/types";
+import type { CalendarEvent, EventType } from "@/types";
 
-export function EventFormModal({ date, events, onClose, onSaved }: { date: string; events: CalendarEvent[]; onClose: () => void; onSaved: () => void }) {
+export function EventFormModal({
+  date,
+  events,
+  selectedDepartment,
+  departmentCounts,
+  onClose,
+  onSaved,
+}: {
+  date: string;
+  events: CalendarEvent[];
+  selectedDepartment: string;
+  departmentCounts: Record<string, number>;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [showForm, setShowForm] = useState(events.length === 0);
   const [allDay, setAllDay] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -17,6 +31,25 @@ export function EventFormModal({ date, events, onClose, onSaved }: { date: strin
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, [onClose]);
+
+  const summary = useMemo(() => {
+    const peopleByType = new Map<EventType, Set<string>>();
+    for (const option of EVENT_TYPE_OPTIONS) peopleByType.set(option.value, new Set());
+    for (const item of events) peopleByType.get(item.event_type)?.add(item.user_id);
+
+    const displayedPeople = new Set(events.map((item) => item.user_id));
+    const absencePeople = new Set(
+      events
+        .filter((item) => item.event_type === "leave" || item.event_type === "overnight")
+        .map((item) => item.user_id),
+    );
+    const memberCount = selectedDepartment === "all"
+      ? Object.values(departmentCounts).reduce((sum, value) => sum + value, 0)
+      : departmentCounts[selectedDepartment] ?? 0;
+    const percentage = memberCount > 0 ? (absencePeople.size / memberCount) * 100 : 0;
+
+    return { peopleByType, displayedPeople, absencePeople, memberCount, percentage };
+  }, [departmentCounts, events, selectedDepartment]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setLoading(true); setError("");
@@ -38,6 +71,31 @@ export function EventFormModal({ date, events, onClose, onSaved }: { date: strin
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={(e) => e.currentTarget === e.target && onClose()}>
       <section className="card max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5" role="dialog" aria-modal="true">
         <div className="flex items-start justify-between"><div><h2 className="text-xl font-black">{date} 일정</h2><p className="text-sm text-slate-500">해당 날짜의 일정 확인 및 추가</p></div><button onClick={onClose} className="rounded-lg p-2 hover:bg-slate-100" aria-label="닫기"><X /></button></div>
+
+        <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-bold text-slate-500">표시 인원 합계</p>
+              <p className="mt-1 text-2xl font-black text-slate-900">{summary.displayedPeople.size}명</p>
+              <p className="mt-1 text-xs text-slate-500">표시 일정 {events.length}건</p>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-500">휴가·외박 인원 비율</p>
+              <p className="mt-1 text-2xl font-black text-blue-800">{summary.percentage.toFixed(1)}%</p>
+              <p className="mt-1 text-xs text-slate-500">
+                휴가·외박 {summary.absencePeople.size}명 / {selectedDepartment === "all" ? "전체" : selectedDepartment} 부서원 {summary.memberCount}명
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {EVENT_TYPE_OPTIONS.map((option) => (
+              <span key={option.value} className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700 shadow-sm">
+                {option.label} {summary.peopleByType.get(option.value)?.size ?? 0}명
+              </span>
+            ))}
+          </div>
+        </div>
+
         {events.length > 0 && (
           <div className="mt-5">
             <div className="flex items-center justify-between gap-3">

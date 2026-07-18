@@ -62,12 +62,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (
       parsed.data.action === "updateIdentity" &&
       actingProfile.role === "department_admin" &&
-      actingUser.id === id &&
       parsed.data.department !== actingProfile.department
     ) {
       return Response.json(
-        { error: "부서관리자는 자신의 부서를 직접 변경할 수 없습니다." },
-        { status: 400 },
+        { error: "부서관리자는 사용자를 다른 부서로 이동할 수 없습니다." },
+        { status: 403 },
       );
     }
 

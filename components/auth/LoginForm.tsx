@@ -36,7 +36,7 @@ export function LoginForm() {
   return (
     <>
       <form onSubmit={(event) => submit(event)} className="space-y-4">
-        <label className="block text-sm font-bold text-slate-700">군번
+        <label className="block text-sm font-bold text-slate-700">아이디
           <input className="input mt-1.5" value={loginId} onChange={(e) => setLoginId(e.target.value)} inputMode="text" autoComplete="username" required />
         </label>
         <label className="block text-sm font-bold text-slate-700">비밀번호
@@ -58,7 +58,7 @@ export function LoginForm() {
             <h2 className="text-xl font-black">관리자 설정 로그인</h2>
             <p className="mt-1 text-sm text-slate-500">관리자 계정만 접근할 수 있습니다.</p>
             <div className="mt-5 space-y-4">
-              <input className="input" placeholder="관리자 군번" value={loginId} onChange={(e) => setLoginId(e.target.value)} required />
+              <input className="input" placeholder="관리자 아이디" value={loginId} onChange={(e) => setLoginId(e.target.value)} required />
               <input className="input" type="password" placeholder="관리자 비밀번호" value={password} onChange={(e) => setPassword(e.target.value)} required />
               {error && <p className="text-sm font-semibold text-rose-700">{error}</p>}
               <div className="flex justify-end gap-2">

@@ -27,12 +27,22 @@ export async function ensurePasswordNotReused(admin: AdminClient, userId: string
   }
 }
 
-export async function recordPassword(admin: AdminClient, userId: string, password: string) {
+export async function recordPassword(
+  admin: AdminClient,
+  userId: string,
+  password: string,
+  options?: { allowExisting?: boolean },
+) {
   const passwordFingerprint = fingerprint(userId, password);
-  const { error } = await admin.from("password_history").insert({
+  const payload = {
     user_id: userId,
     password_fingerprint: passwordFingerprint,
-  });
+    ...(options?.allowExisting ? { created_at: new Date().toISOString() } : {}),
+  };
+  const query = options?.allowExisting
+    ? admin.from("password_history").upsert(payload, { onConflict: "user_id,password_fingerprint" })
+    : admin.from("password_history").insert(payload);
+  const { error } = await query;
   if (error) throw new Error(error.message);
 
   const { data: history, error: historyError } = await admin

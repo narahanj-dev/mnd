@@ -48,6 +48,8 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
 
 export const DEPARTMENTS = ["교향악대", "관악대", "전통악대", "팡파르대", "대대본부"] as const;
 
+export const RESET_TEMPORARY_PASSWORD = "mnd890701!";
+
 
 export const LEAVE_SUBTYPE_OPTIONS = ["연가", "포상", "위로", "청원"] as const;
 export const OVERNIGHT_SUBTYPE_OPTIONS = ["정기외박", "포상외박"] as const;

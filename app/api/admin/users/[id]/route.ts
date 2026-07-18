@@ -1,10 +1,9 @@
 import { z } from "zod";
 import { authErrorResponse, canManageUser, requireUser, requireUserManager } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DEPARTMENTS } from "@/lib/constants";
+import { DEPARTMENTS, RESET_TEMPORARY_PASSWORD } from "@/lib/constants";
 import { decryptProfile, encryptPii, encryptProfileValues, loginIdHash, loginIdToAuthEmail, sanitizedAuthUserMetadata } from "@/lib/security/pii";
-import { ensurePasswordNotReused, recordPassword } from "@/lib/security/password-history";
-import { generateTemporaryPassword } from "@/lib/security/password-policy";
+import { recordPassword } from "@/lib/security/password-history";
 import type { Profile } from "@/types";
 
 const updateSchema = z.object({
@@ -17,19 +16,6 @@ const resetPasswordSchema = z.object({ action: z.literal("resetPassword") });
 const patchSchema = z.discriminatedUnion("action", [updateSchema, resetPasswordSchema]);
 
 type AdminClient = ReturnType<typeof createAdminClient>;
-
-async function createUnusedTemporaryPassword(admin: AdminClient, userId: string) {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const password = generateTemporaryPassword();
-    try {
-      await ensurePasswordNotReused(admin, userId, password);
-      return password;
-    } catch (error) {
-      if (!(error instanceof Error) || !error.message.includes("최근 사용")) throw error;
-    }
-  }
-  throw new Error("재사용되지 않은 임시 비밀번호를 생성하지 못했습니다.");
-}
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -56,7 +42,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (authReadError || !authData.user) return Response.json({ error: authReadError?.message ?? "인증 계정을 찾을 수 없습니다." }, { status: 404 });
 
     if (parsed.data.action === "resetPassword") {
-      const temporaryPassword = await createUnusedTemporaryPassword(admin, id);
+      const temporaryPassword = RESET_TEMPORARY_PASSWORD;
       const { error: authError } = await admin.auth.admin.updateUserById(id, {
         password: temporaryPassword,
         user_metadata: sanitizedAuthUserMetadata(true),
@@ -64,7 +50,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (authError) return Response.json({ error: authError.message }, { status: 400 });
 
       try {
-        await recordPassword(admin, id, temporaryPassword);
+        await recordPassword(admin, id, temporaryPassword, { allowExisting: true });
       } catch (error) {
         return Response.json({ error: error instanceof Error ? error.message : "비밀번호 이력 저장 실패" }, { status: 400 });
       }
@@ -77,7 +63,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         sender_id: actingUser.id,
         recipient_id: id,
         title: "비밀번호 초기화 안내",
-        content: "관리자가 비밀번호를 초기화했습니다. 새 임시 비밀번호로 로그인한 뒤 즉시 비밀번호를 변경하세요.",
+        content: "관리자가 비밀번호를 초기화했습니다. 임시 비밀번호로 로그인한 뒤 즉시 새 비밀번호로 변경하세요.",
         message_type: "password_reset",
       });
       return Response.json({ ok: true, temporaryPassword });

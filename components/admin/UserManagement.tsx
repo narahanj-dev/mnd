@@ -164,7 +164,7 @@ export function UserManagement() {
   async function resetPassword(user: Profile) {
     if (
       !window.confirm(
-        `${user.display_name}님의 비밀번호를 강력한 임시 비밀번호로 초기화하시겠습니까?`,
+        `${user.display_name}님의 비밀번호를 임시 비밀번호 mnd890701!로 초기화하시겠습니까? 로그인 후 비밀번호 변경이 필요합니다.`,
       )
     )
       return;
@@ -178,7 +178,7 @@ export function UserManagement() {
           body: JSON.stringify({ action: "resetPassword" }),
         }),
       );
-      setMessage(`${user.display_name}님의 임시 비밀번호: ${result.temporaryPassword} (한 번만 전달하고 별도로 저장하지 마세요.)`);
+      setMessage(`${user.display_name}님의 임시 비밀번호는 ${result.temporaryPassword}입니다. 로그인 후 반드시 새 비밀번호로 변경해야 합니다.`);
       await load(selectedDepartment);
     } catch (error) {
       setMessage(

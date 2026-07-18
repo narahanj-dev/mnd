@@ -1,0 +1,9 @@
+수정된 실행 파일
+1. app/globals.css
+2. app/login/page.tsx
+
+추가 안내 파일
+3. APPLY_DARK_MODE_CONTRAST_UPDATE.md
+4. MODIFIED_FILES_DARK_MODE_CONTRAST.txt
+
+Supabase SQL 변경 없음

@@ -31,16 +31,16 @@ export default async function LoginPage({
           </div>
         )}
 
-        <aside className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left" aria-label="로그인 공지사항">
-          <div className="flex items-center gap-2 text-amber-900">
+        <aside className="notice-panel mb-6 rounded-2xl p-4 text-left" aria-label="로그인 공지사항">
+          <div className="notice-panel-title flex items-center gap-2">
             <Megaphone size={18} aria-hidden="true" />
             <h2 className="text-sm font-black">공지사항</h2>
           </div>
           <div className="mt-3 space-y-2">
-            <div className="rounded-xl border-2 border-rose-400 bg-rose-100 px-4 py-3 text-center text-sm font-black leading-6 text-rose-900 shadow-sm">
+            <div className="critical-notice rounded-xl px-4 py-3 text-left text-sm font-black leading-6" role="note">
               중요: 업데이트로 인해 회원가입 승인을 받지 못한 사용자는 재가입해 주시기 바랍니다.
             </div>
-            <div className="rounded-xl border-2 border-rose-400 bg-rose-100 px-4 py-3 text-center text-sm font-black leading-6 text-rose-900 shadow-sm">
+            <div className="critical-notice rounded-xl px-4 py-3 text-left text-sm font-black leading-6" role="note">
               중요: 기존사용자 아이디 패스워드는 관리자가 수정하였으니 문의바랍니다.
             </div>
           </div>

@@ -17,11 +17,7 @@ export default async function UsersPage() {
     .eq("id", user.id)
     .single<Pick<Profile, "role" | "account_status">>();
 
-  if (
-    !profile ||
-    profile.account_status !== "active" ||
-    (profile.role !== "admin" && profile.role !== "department_admin")
-  ) {
+  if (!profile || profile.account_status !== "active") {
     redirect("/calendar");
   }
 

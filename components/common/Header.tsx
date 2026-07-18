@@ -1,6 +1,14 @@
 "use client";
 
-import { BarChart3, CalendarDays, Inbox, LogOut, ShieldCheck, UserRound, Users } from "lucide-react";
+import {
+  BarChart3,
+  CalendarDays,
+  Inbox,
+  LogOut,
+  ShieldCheck,
+  UserRound,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -12,8 +20,16 @@ const baseLinks = [
   { href: "/my-events", label: "내 일정", icon: UserRound },
   { href: "/messages", label: "쪽지", icon: Inbox },
 ];
-const approvalLink = { href: "/approvals", label: "일정 승인", icon: ShieldCheck };
-const userManagementLink = { href: "/users", label: "사용자 관리", icon: Users };
+const approvalLink = {
+  href: "/approvals",
+  label: "일정 승인",
+  icon: ShieldCheck,
+};
+const userManagementLink = {
+  href: "/users",
+  label: "사용자 관리",
+  icon: Users,
+};
 const adminOnlyLinks = [
   { href: "/admin/signup-requests", label: "가입 신청", icon: Inbox },
   { href: "/admin/settings", label: "관리자 설정", icon: ShieldCheck },
@@ -33,10 +49,16 @@ export function Header({
   const [loading, setLoading] = useState(false);
   const links =
     profile.role === "admin"
-      ? [...baseLinks, approvalLink, adminOnlyLinks[0], userManagementLink, adminOnlyLinks[1]]
+      ? [
+          ...baseLinks,
+          approvalLink,
+          adminOnlyLinks[0],
+          userManagementLink,
+          adminOnlyLinks[1],
+        ]
       : profile.role === "department_admin"
         ? [...baseLinks, approvalLink, adminOnlyLinks[0], userManagementLink]
-        : baseLinks;
+        : [...baseLinks, userManagementLink];
 
   async function logout() {
     if (!confirm("로그아웃하시겠습니까?")) return;
@@ -52,7 +74,10 @@ export function Header({
         <Link href="/calendar" className="shrink-0 font-black text-slate-900">
           부서 공동 연차달력
         </Link>
-        <nav className="flex flex-1 gap-1 overflow-x-auto" aria-label="주요 메뉴">
+        <nav
+          className="flex flex-1 gap-1 overflow-x-auto"
+          aria-label="주요 메뉴"
+        >
           {links.map(({ href, label, icon: Icon }) => {
             const active = pathname.startsWith(href);
             const count =
@@ -91,7 +116,8 @@ export function Header({
           className="btn-secondary flex items-center gap-1.5 text-sm"
           aria-label="로그아웃"
         >
-          <LogOut size={16} /> <span className="hidden sm:inline">로그아웃</span>
+          <LogOut size={16} />{" "}
+          <span className="hidden sm:inline">로그아웃</span>
         </button>
       </div>
     </header>

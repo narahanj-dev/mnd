@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { decryptProfile, legacyLoginIdToAuthEmail, loginIdToAuthEmail } from "@/lib/security/pii";
+import { decryptProfile, loginIdToAuthEmail } from "@/lib/security/pii";
 import { passwordExpired } from "@/lib/security/password-history";
 import type { Profile } from "@/types";
-import { assertSameOrigin, clientIp } from "@/lib/security/request";
+import { assertSameOrigin, clientIp, readJsonBody } from "@/lib/security/request";
 import { assertRateLimitAvailable, enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError, safeErrorResponse } from "@/lib/security/errors";
 import { startAppSession } from "@/lib/security/session";
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       await assertRateLimitAvailable({ purpose: "login-ip", identity: ip, limit: 100, windowSeconds: 600 });
     }
 
-    const parsed = schema.safeParse(await request.json().catch(() => null));
+    const parsed = schema.safeParse(await readJsonBody(request));
     if (!parsed.success) {
       if (knownIp) await enforceRateLimit({ purpose: "login-ip", identity: ip, limit: 100, windowSeconds: 600 });
       throw new SecurityError("INVALID_LOGIN", 400, "아이디와 비밀번호를 확인하세요.");
@@ -36,18 +36,10 @@ export async function POST(request: Request) {
     await assertRateLimitAvailable({ purpose: "login-id", identity: auditLoginId, limit: 6, windowSeconds: 600 });
 
     const supabase = await createClient();
-    let { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: loginIdToAuthEmail(parsed.data.loginId),
       password: parsed.data.password,
     });
-    if (error || !data.user) {
-      const legacyResult = await supabase.auth.signInWithPassword({
-        email: legacyLoginIdToAuthEmail(parsed.data.loginId),
-        password: parsed.data.password,
-      });
-      data = legacyResult.data;
-      error = legacyResult.error;
-    }
     if (error || !data.user) {
       await enforceRateLimit({ purpose: "login-id", identity: auditLoginId, limit: 6, windowSeconds: 600 });
       if (knownIp) await enforceRateLimit({ purpose: "login-ip", identity: ip, limit: 100, windowSeconds: 600 });

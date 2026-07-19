@@ -7,7 +7,7 @@ import { validatePassword } from "@/lib/security/password-policy";
 import { recordPassword } from "@/lib/security/password-history";
 import type { Profile } from "@/types";
 import { requireAal2 } from "@/lib/security/mfa";
-import { assertSameOrigin, clientIp } from "@/lib/security/request";
+import { assertSameOrigin, clientIp, readJsonBody } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
 import { encryptMessageFields } from "@/lib/security/secure-fields";
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     const { user } = await requireAdmin();
     actorId = user.id;
     await enforceRateLimit({ purpose: "user-create", identity: `${user.id}:${clientIp(request)}`, limit: 10, windowSeconds: 600 });
-    const parsed = schema.safeParse(await request.json().catch(() => null));
+    const parsed = schema.safeParse(await readJsonBody(request));
     if (!parsed.success) throw new SecurityError("INVALID_INPUT", 400, "계정 입력값을 확인하세요.");
     await enforceRateLimit({ purpose: "privileged-reauth", identity: `${user.id}:${clientIp(request)}`, limit: 5, windowSeconds: 1800 });
     await verifyCurrentPassword({ userId: user.id, email: user.email, password: parsed.data.currentPassword });

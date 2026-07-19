@@ -12,9 +12,9 @@ Next.js 16과 Supabase를 사용하는 부서 공동 휴가·외박·외출·기
 - 최근 비밀번호 5개 재사용 금지와 6개월 변경주기
 - 서명된 HttpOnly 쿠키를 이용한 서버 강제 5분 유휴 세션
 - 로그인·관리자 작업·중요 재인증 요청 횟수 제한
-- 관리자와 부서관리자 TOTP MFA(`aal2`) 강제
+- 관리자와 부서관리자 TOTP MFA(`aal2`) 강제 및 최초 등록 시 현재 비밀번호 재확인
 - 계정 생성·권한 변경·초기화·삭제 시 현재 비밀번호 재확인
-- 모든 상태 변경 API의 동일 출처 검사(CSRF 방어)
+- 모든 상태 변경 API의 동일 출처 검사(CSRF 방어)와 JSON 형식·16KB 본문 제한
 - CSP nonce, HSTS, 클릭재킹·MIME 스니핑 방지 등 보안 헤더
 - 브라우저의 업무 테이블 직접 접근 차단과 서버 API 권한검사
 - 부서관리자는 자기 부서의 일반사용자만 관리하며 관리자·부서관리자 지정은 최고관리자만 가능
@@ -41,7 +41,7 @@ npm run security-check
 
 ## 기존 운영 프로젝트 적용
 
-반드시 [`APPLY_SECURITY_REMEDIATION_UPDATE.md`](./APPLY_SECURITY_REMEDIATION_UPDATE.md)의 순서대로 적용하세요. 새 코드가 보안용 DB 함수와 테이블을 사용하므로 SQL과 배포 순서가 중요합니다.
+반드시 [`APPLY_SECURITY_PATCH_20260719.md`](./APPLY_SECURITY_PATCH_20260719.md)의 순서대로 적용하세요. 특히 구형 Auth 이메일 전환과 평문 저장 차단 SQL을 새 코드 배포 전에 완료해야 합니다.
 
 핵심 SQL:
 
@@ -49,20 +49,28 @@ npm run security-check
 supabase/migration_20260719_full_server_security.sql
 ```
 
-기존 평문 일정 메모·사유·쪽지 암호화:
+구형 Auth 이메일 전환 및 기존 평문 일정 메모·사유·쪽지 암호화:
 
 ```bash
+npm run migrate-legacy-auth-emails
 npm run migrate-content-encryption
+```
+
+암호화 완료 후 Supabase SQL Editor에서 다음 파일을 실행합니다.
+
+```text
+supabase/migration_20260719_encrypted_content_constraints.sql
 ```
 
 ## 새 Supabase 프로젝트
 
 1. `supabase/schema.sql` 실행
 2. `supabase/migration_20260719_full_server_security.sql` 실행
-3. `.env.local.example`을 참고해 환경변수 설정
-4. `npm run create-admin` 실행
-5. 애플리케이션 배포
-6. 최초 관리자 로그인 후 TOTP MFA 등록
+3. `supabase/migration_20260719_encrypted_content_constraints.sql` 실행
+4. `.env.local.example`을 참고해 환경변수 설정
+5. `npm run create-admin` 실행
+6. 애플리케이션 배포
+7. 최초 관리자 로그인 후 현재 비밀번호 재확인 및 TOTP MFA 등록
 
 `supabase/rls-policies.sql`은 최종 정책만 따로 재적용해야 할 때 사용하는 파일입니다. 통합 보안 마이그레이션을 실행했다면 동일 정책이 이미 포함됩니다.
 

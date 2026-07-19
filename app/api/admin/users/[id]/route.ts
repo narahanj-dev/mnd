@@ -7,7 +7,7 @@ import { insertPasswordRecord, prunePasswordHistory, removePasswordRecord } from
 import type { Profile } from "@/types";
 import { generateTemporaryPassword } from "@/lib/security/temporary-password";
 import { encryptMessageFields } from "@/lib/security/secure-fields";
-import { assertSameOrigin, clientIp } from "@/lib/security/request";
+import { assertSameOrigin, clientIp, readJsonBody } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
 import { beginPrivilegedAudit, completePrivilegedAudit, writeAuditLogBestEffort } from "@/lib/security/audit";
@@ -37,7 +37,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     actorId = actingUser.id;
     const { id } = await context.params;
     targetId = id;
-    const parsed = patchSchema.safeParse(await request.json().catch(() => null));
+    const parsed = patchSchema.safeParse(await readJsonBody(request));
     if (!parsed.success) throw new SecurityError("INVALID_INPUT", 400, "수정 내용을 확인하세요.");
 
     if (actingProfile.role !== "user") {
@@ -176,7 +176,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     actorId = actingUser.id;
     const { id } = await context.params;
     targetId = id;
-    const deleteInput = z.object({ currentPassword: z.string().min(1).max(100) }).safeParse(await request.json().catch(() => null));
+    const deleteInput = z.object({ currentPassword: z.string().min(1).max(100) }).safeParse(await readJsonBody(request));
     if (!deleteInput.success) throw new SecurityError("REAUTH_REQUIRED", 400, "현재 비밀번호를 입력하세요.");
     if (actingUser.id === id) throw new SecurityError("SELF_DELETE", 400, "현재 로그인한 계정은 삭제할 수 없습니다.");
     await enforceRateLimit({ purpose: "user-delete", identity: `${actingUser.id}:${clientIp(request)}`, limit: 10, windowSeconds: 600 });

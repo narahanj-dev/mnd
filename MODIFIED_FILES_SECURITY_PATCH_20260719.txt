@@ -1,0 +1,39 @@
+[삭제]
+- app/signup-request/page.tsx
+- app/(protected)/admin/signup-requests/page.tsx
+- app/api/signup-request/route.ts
+- app/api/admin/signup-requests/route.ts
+- app/api/admin/signup-requests/[id]/route.ts
+- components/auth/SignupRequestForm.tsx
+- components/admin/SignupRequestList.tsx
+- lib/security/signup-invite-code.ts
+- lib/supabase/client.ts
+- APPLY_FULL_SECURITY_UPDATE.md
+- APPLY_LOGIN_NOTICE_REVISION.md
+- APPLY_PASSWORD_RESET_DARK_MODE_UPDATE.md
+
+[추가]
+- scripts/security-crypto.mjs
+- scripts/migrate-legacy-auth-emails.mjs
+- supabase/migration_20260719_encrypted_content_constraints.sql
+- APPLY_SECURITY_PATCH_20260719.md
+- MODIFIED_FILES_SECURITY_PATCH_20260719.txt
+
+[수정]
+- app/api/auth/mfa/route.ts
+- components/auth/MfaGate.tsx
+- app/api/auth/login/route.ts
+- lib/security/pii.ts
+- lib/security/request.ts
+- scripts/create-initial-users.mjs
+- scripts/migrate-sensitive-data.mjs
+- scripts/migrate-content-encryption.mjs
+- scripts/seed-demo.mjs
+- app/api 내 JSON 본문을 사용하는 상태 변경 route.ts 파일들
+- package.json
+- package-lock.json
+- .env.local.example
+- supabase/schema.sql
+- tests/security/source-security.test.mjs
+- README.md
+- supabase/README_MIGRATIONS.md

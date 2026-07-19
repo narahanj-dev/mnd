@@ -3,7 +3,7 @@ import { requireAdmin, requireUser, authErrorResponse } from "@/lib/auth/guards"
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptProfileRelation } from "@/lib/security/pii";
 import { decryptMessages, encryptMessageFields } from "@/lib/security/secure-fields";
-import { assertSameOrigin, clientIp } from "@/lib/security/request";
+import { assertSameOrigin, clientIp, readJsonBody } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
 import { writeAuditLog, writeAuditLogBestEffort } from "@/lib/security/audit";
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     const { user } = await requireAdmin();
     actorId = user.id;
     await enforceRateLimit({ purpose: "message-send", identity: `${user.id}:${clientIp(request)}`, limit: 30, windowSeconds: 600 });
-    const parsed = sendSchema.safeParse(await request.json().catch(() => null));
+    const parsed = sendSchema.safeParse(await readJsonBody(request));
     if (!parsed.success) throw new SecurityError("INVALID_INPUT", 400, "쪽지 내용을 확인하세요.");
     const admin = createAdminClient();
     const { data: recipient } = await admin.from("profiles").select("id").eq("id", parsed.data.recipientId).eq("account_status", "active").maybeSingle();

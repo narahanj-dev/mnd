@@ -12,7 +12,8 @@
     "generate-security-keys": "node scripts/generate-security-keys.mjs",
     "migrate-sensitive-data": "node scripts/migrate-sensitive-data.mjs",
     "migrate-content-encryption": "node scripts/migrate-content-encryption.mjs",
-    "security-check": "npm run lint && npm run build && node --test tests/security/*.test.mjs"
+    "security-check": "npm run lint && npm run build && node --test tests/security/*.test.mjs",
+    "migrate-legacy-auth-emails": "node scripts/migrate-legacy-auth-emails.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",
@@ -21,8 +22,8 @@
     "date-fns": "^4.4.0",
     "lucide-react": "^1.24.0",
     "next": "16.2.10",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
     "zod": "^4.4.3"
   },
   "devDependencies": {

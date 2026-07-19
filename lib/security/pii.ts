@@ -69,9 +69,6 @@ export function loginIdToAuthEmail(loginId: string) {
   return `${loginIdHash(loginId)}@${AUTH_EMAIL_DOMAIN}`;
 }
 
-export function legacyLoginIdToAuthEmail(loginId: string) {
-  return `${loginId.trim()}@${AUTH_EMAIL_DOMAIN}`;
-}
 
 export function sanitizedAuthUserMetadata(mustChangePassword: boolean) {
   return {

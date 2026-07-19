@@ -1,66 +1,26 @@
-import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
+import {
+  blindIndex,
+  decryptValue,
+  encryptValue,
+  keyFromEnv,
+  loadLocalEnv,
+  requiredEnv,
+} from './security-crypto.mjs';
 
-const envPath = path.join(process.cwd(), '.env.local');
-if (fs.existsSync(envPath)) {
-  for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const index = trimmed.indexOf('=');
-    if (index > 0) process.env[trimmed.slice(0, index).trim()] ??= trimmed.slice(index + 1).trim().replace(/^['\"]|['\"]$/g, '');
-  }
-}
+loadLocalEnv();
 
-const required = (name) => {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`${name} 환경변수가 필요합니다.`);
-  return value;
-};
-
-const supabaseUrl = required('NEXT_PUBLIC_SUPABASE_URL');
-const serviceRoleKey = required('SUPABASE_SERVICE_ROLE_KEY');
-const encryptionKeyRaw = required('PII_ENCRYPTION_KEY');
-const hashKeyRaw = required('PII_HASH_KEY');
-
-function keyFrom(raw) {
-  if (/^[0-9a-f]{64}$/i.test(raw)) return Buffer.from(raw, 'hex');
-  const decoded = Buffer.from(raw, 'base64');
-  if (decoded.length === 32) return decoded;
-  return crypto.createHash('sha256').update(raw, 'utf8').digest();
-}
-
-const encryptionKey = keyFrom(encryptionKeyRaw);
-const hashKey = keyFrom(hashKeyRaw);
+const supabaseUrl = requiredEnv('NEXT_PUBLIC_SUPABASE_URL');
+const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY');
+const encryptionKey = keyFromEnv('PII_ENCRYPTION_KEY');
+const hashKey = keyFromEnv('PII_HASH_KEY');
 const admin = createClient(supabaseUrl, serviceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-function encrypt(value) {
-  if (value == null || value === '') return value ?? null;
-  if (value.startsWith('enc:v1:')) return value;
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, iv);
-  const ciphertext = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return ['enc:v1', iv.toString('base64url'), tag.toString('base64url'), ciphertext.toString('base64url')].join(':');
-}
-
-function decrypt(value) {
-  if (value == null || value === '' || !value.startsWith('enc:v1:')) return value;
-  const parts = value.split(':');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKey, Buffer.from(parts[2], 'base64url'));
-  decipher.setAuthTag(Buffer.from(parts[3], 'base64url'));
-  return Buffer.concat([decipher.update(Buffer.from(parts[4], 'base64url')), decipher.final()]).toString('utf8');
-}
-
 function loginHash(loginId) {
-  return crypto.createHmac('sha256', hashKey)
-    .update(`login-id:${loginId.trim().normalize('NFKC').toLocaleLowerCase('en-US')}`, 'utf8')
-    .digest('hex');
+  return blindIndex(loginId, 'login-id', hashKey);
 }
-
 function authEmail(loginId) {
   return `${loginHash(loginId)}@leave-calendar.local`;
 }
@@ -69,9 +29,11 @@ async function migrateProfiles() {
   const { data: rows, error } = await admin.from('profiles').select('*');
   if (error) throw error;
   for (const row of rows ?? []) {
-    const loginId = decrypt(row.login_id);
-    const displayName = decrypt(row.display_name);
-    const monthDay = row.birth_month_day ? decrypt(row.birth_month_day) : row.birth_date?.slice(5) ?? null;
+    const loginId = decryptValue(row.login_id, encryptionKey);
+    const displayName = decryptValue(row.display_name, encryptionKey);
+    const monthDay = row.birth_month_day
+      ? decryptValue(row.birth_month_day, encryptionKey)
+      : row.birth_date?.slice(5) ?? null;
     if (!loginId || !displayName) throw new Error(`프로필 ${row.id}의 아이디 또는 이름이 없습니다.`);
 
     const { data: authData, error: authReadError } = await admin.auth.admin.getUserById(row.id);
@@ -85,10 +47,10 @@ async function migrateProfiles() {
     if (authError) throw authError;
 
     const { error: updateError } = await admin.from('profiles').update({
-      login_id: encrypt(loginId),
+      login_id: encryptValue(loginId, encryptionKey),
       login_id_hash: loginHash(loginId),
-      display_name: encrypt(displayName),
-      birth_month_day: monthDay ? encrypt(monthDay) : null,
+      display_name: encryptValue(displayName, encryptionKey),
+      birth_month_day: monthDay ? encryptValue(monthDay, encryptionKey) : null,
       must_change_password: true,
       password_changed_at: null,
     }).eq('id', row.id);
@@ -101,8 +63,10 @@ async function migrateAdminSettings() {
   const { data: rows, error } = await admin.from('admin_settings').select('*');
   if (error) throw error;
   for (const row of rows ?? []) {
-    const name = decrypt(row.display_name);
-    const { error: updateError } = await admin.from('admin_settings').update({ display_name: encrypt(name) }).eq('id', row.id);
+    const name = decryptValue(row.display_name, encryptionKey);
+    const { error: updateError } = await admin.from('admin_settings')
+      .update({ display_name: encryptValue(name, encryptionKey) })
+      .eq('id', row.id);
     if (updateError) throw updateError;
   }
 }

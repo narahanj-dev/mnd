@@ -20,6 +20,8 @@ type EnrollResponse = {
 export function MfaGate() {
   const router = useRouter();
   const [factorId, setFactorId] = useState<string | null>(null);
+  const [needsEnrollment, setNeedsEnrollment] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [qrCode, setQrCode] = useState("");
   const [secret, setSecret] = useState("");
   const [code, setCode] = useState("");
@@ -39,22 +41,8 @@ export function MfaGate() {
           router.refresh();
           return;
         }
-        if (status.factorId) {
-          setFactorId(status.factorId);
-          setLoading(false);
-          return;
-        }
-        const enrolled = await parseJsonResponse<EnrollResponse>(
-          await fetch("/api/auth/mfa", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "enroll" }),
-          }),
-        );
-        if (!active) return;
-        setFactorId(enrolled.factorId);
-        setQrCode(enrolled.qrCode ?? "");
-        setSecret(enrolled.secret ?? "");
+        setFactorId(status.factorId);
+        setNeedsEnrollment(status.needsEnrollment);
       } catch (loadError) {
         if (active) setError(loadError instanceof Error ? loadError.message : "추가 인증 정보를 확인하지 못했습니다.");
       } finally {
@@ -63,6 +51,34 @@ export function MfaGate() {
     })();
     return () => { active = false; };
   }, [router]);
+
+  async function enroll(event: FormEvent) {
+    event.preventDefault();
+    if (!currentPassword) {
+      setError("현재 비밀번호를 입력하세요.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const enrolled = await parseJsonResponse<EnrollResponse>(
+        await fetch("/api/auth/mfa", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "enroll", currentPassword }),
+        }),
+      );
+      setFactorId(enrolled.factorId);
+      setQrCode(enrolled.qrCode ?? "");
+      setSecret(enrolled.secret ?? "");
+      setNeedsEnrollment(false);
+      setCurrentPassword("");
+    } catch (enrollError) {
+      setError(enrollError instanceof Error ? enrollError.message : "인증 앱 등록을 시작하지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function verify(event: FormEvent) {
     event.preventDefault();
@@ -86,6 +102,30 @@ export function MfaGate() {
       setError(verifyError instanceof Error ? verifyError.message : "인증 코드가 올바르지 않거나 만료되었습니다.");
       setLoading(false);
     }
+  }
+
+  if (needsEnrollment && !factorId) {
+    return (
+      <form onSubmit={enroll} className="card mx-auto max-w-lg space-y-5 p-6 sm:p-8">
+        <h1 className="text-2xl font-black">관리자 인증 앱 등록</h1>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          계정 탈취자가 자신의 인증 앱을 등록하지 못하도록 현재 비밀번호를 다시 확인합니다.
+        </p>
+        <label className="block text-sm font-bold">현재 비밀번호
+          <input
+            type="password"
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+            autoComplete="current-password"
+            className="input mt-1"
+            maxLength={100}
+            required
+          />
+        </label>
+        {error && <p className="rounded-lg bg-rose-50 p-3 text-sm font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-200">{error}</p>}
+        <button className="btn-primary w-full" disabled={loading}>{loading ? "확인 중..." : "인증 앱 등록 시작"}</button>
+      </form>
+    );
   }
 
   return (

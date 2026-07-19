@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { CalendarEvent, Profile } from "@/types";
 import { decryptProfile, maskDisplayName } from "@/lib/security/pii";
 import { decryptCalendarEvents, encryptCalendarEventFields } from "@/lib/security/secure-fields";
-import { assertSameOrigin, clientIp, keyedDigest } from "@/lib/security/request";
+import { assertSameOrigin, clientIp, keyedDigest, readJsonBody } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
 import { writeAuditLog, writeAuditLogBestEffort } from "@/lib/security/audit";
@@ -169,7 +169,7 @@ export async function POST(request: Request) {
     actorId = user.id;
     if (profile.role !== "user") await requireAal2(supabase);
     await enforceRateLimit({ purpose: "event-create", identity: `${user.id}:${clientIp(request)}`, limit: 20, windowSeconds: 600 });
-    const parsed = createSchema.safeParse(await request.json().catch(() => null));
+    const parsed = createSchema.safeParse(await readJsonBody(request));
     if (!parsed.success) throw new SecurityError("INVALID_INPUT", 400, "일정 입력값을 확인하세요.");
     const value = parsed.data;
     if (!isValidEventTitle(value.eventType, value.title.trim())) throw new SecurityError("INVALID_EVENT_TYPE", 400, "선택한 표시 항목의 종류를 확인하세요.");

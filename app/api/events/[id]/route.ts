@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { EVENT_TYPE_VALUES, formatEventLabel, isValidEventTitle } from "@/lib/constants";
 import type { EventType } from "@/types";
 import { decryptCalendarEvent, encryptCalendarEventFields, encryptEventChangeFields, encryptMessageFields } from "@/lib/security/secure-fields";
-import { assertSameOrigin, clientIp } from "@/lib/security/request";
+import { assertSameOrigin, clientIp, readJsonBody } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
 import { requireAal2 } from "@/lib/security/mfa";
@@ -56,7 +56,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     await enforceRateLimit({ purpose: "event-change", identity: `${user.id}:${clientIp(request)}`, limit: 30, windowSeconds: 600 });
     const { id } = await context.params;
     resourceId = id;
-    const parsed = schema.safeParse(await request.json().catch(() => null));
+    const parsed = schema.safeParse(await readJsonBody(request));
     if (!parsed.success) throw new SecurityError("INVALID_INPUT", 400, "수정·삭제 사유와 요청 내용을 확인하세요.");
 
     const admin = createAdminClient();

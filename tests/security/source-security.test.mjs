@@ -131,3 +131,53 @@ test('dependency override pins a patched PostCSS release', () => {
   const packageJson = JSON.parse(read('package.json'));
   assert.equal(packageJson.overrides?.postcss, '8.5.19');
 });
+
+test('MFA enrollment requires current-password reauthentication', () => {
+  const route = read('app/api/auth/mfa/route.ts');
+  const gate = read('components/auth/MfaGate.tsx');
+  assert.match(route, /action:\s*z\.literal\("enroll"\), currentPassword/);
+  assert.match(route, /verifyCurrentPassword/);
+  assert.match(gate, /currentPassword/);
+  assert.doesNotMatch(gate, /body:\s*JSON\.stringify\(\{ action: "enroll" \}\)/);
+});
+
+test('demo seed is non-production, project-bound and encrypted', () => {
+  const seed = read('scripts/seed-demo.mjs');
+  assert.match(seed, /NODE_ENV === 'production'/);
+  assert.match(seed, /ALLOW_DEMO_SEED !== 'true'/);
+  assert.match(seed, /DEMO_SEED_ALLOWED_PROJECT_REF/);
+  assert.match(seed, /encryptValue\('연가 승인 안내'/);
+  assert.match(seed, /encryptEvent/);
+});
+
+test('legacy plaintext Auth email login fallback is removed', () => {
+  assert.doesNotMatch(read('app/api/auth/login/route.ts'), /legacyLoginIdToAuthEmail/);
+  assert.doesNotMatch(read('lib/security/pii.ts'), /legacyLoginIdToAuthEmail/);
+  assert.match(read('scripts/migrate-legacy-auth-emails.mjs'), /expectedEmail/);
+});
+
+test('database constraints reject plaintext event and message content', () => {
+  const migration = read('supabase/migration_20260719_encrypted_content_constraints.sql');
+  assert.match(migration, /calendar_events_title_encrypted/);
+  assert.match(migration, /event_change_requests_reason_encrypted/);
+  assert.match(migration, /messages_content_encrypted/);
+  assert.match(migration, /npm run migrate-content-encryption/);
+});
+
+test('React packages are aligned to the patched release', () => {
+  const packageJson = JSON.parse(read('package.json'));
+  assert.equal(packageJson.dependencies.react, '19.2.6');
+  assert.equal(packageJson.dependencies['react-dom'], '19.2.6');
+});
+
+test('state-changing JSON requests enforce type and size limits', () => {
+  const requestSecurity = read('lib/security/request.ts');
+  assert.match(requestSecurity, /UNSUPPORTED_MEDIA_TYPE/);
+  assert.match(requestSecurity, /PAYLOAD_TOO_LARGE/);
+  for (const file of filesUnder('app/api')) {
+    const source = read(file);
+    if (/export async function (POST|PATCH|DELETE)/.test(source) && /safeParse\(/.test(source)) {
+      assert.match(source, /readJsonBody\(request\)/, `${file} must use bounded JSON parsing`);
+    }
+  }
+});

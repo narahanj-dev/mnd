@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptPii, encryptProfileValues, loginIdHash, loginIdToAuthEmail, sanitizedAuthUserMetadata } from "@/lib/security/pii";
 import { ensurePasswordNotReused, insertPasswordRecord, prunePasswordHistory, removePasswordRecord } from "@/lib/security/password-history";
 import { validatePassword } from "@/lib/security/password-policy";
-import { assertSameOrigin, clientIp } from "@/lib/security/request";
+import { assertSameOrigin, clientIp, readJsonBody } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
 import { startAppSession } from "@/lib/security/session";
@@ -26,7 +26,7 @@ export async function PATCH(request: Request) {
     const { user, profile } = await requireAdmin();
     actorId = user.id;
     await enforceRateLimit({ purpose: "admin-settings", identity: `${user.id}:${clientIp(request)}`, limit: 5, windowSeconds: 1800 });
-    const parsed = schema.safeParse(await request.json().catch(() => null));
+    const parsed = schema.safeParse(await readJsonBody(request));
     if (!parsed.success) throw new SecurityError("INVALID_INPUT", 400, "입력값과 현재 비밀번호를 확인하세요.");
 
     await verifyCurrentPassword({

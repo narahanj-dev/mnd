@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { requireUser, authErrorResponse } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { assertSameOrigin } from "@/lib/security/request";
+import { assertSameOrigin, readJsonBody } from "@/lib/security/request";
 import { SecurityError } from "@/lib/security/errors";
 import { requireAal2 } from "@/lib/security/mfa";
 
@@ -13,7 +13,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const { user, profile, supabase } = await requireUser();
     if (profile.role !== "user") await requireAal2(supabase);
     const { id } = await context.params;
-    const parsed = schema.safeParse(await request.json().catch(() => null));
+    const parsed = schema.safeParse(await readJsonBody(request));
     if (!parsed.success) throw new SecurityError("INVALID_INPUT", 400, "요청을 확인하세요.");
     const update: Record<string, unknown> = {};
     if (typeof parsed.data.isRead === "boolean") { update.is_read = parsed.data.isRead; update.read_at = parsed.data.isRead ? new Date().toISOString() : null; }

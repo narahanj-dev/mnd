@@ -46,7 +46,12 @@ create table public.calendar_events (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint valid_event_dates check (end_date >= start_date),
-  constraint valid_event_times check (all_day or (start_time is not null and end_time is not null and end_time > start_time))
+  constraint valid_event_times check (all_day or (start_time is not null and end_time is not null and end_time > start_time)),
+  constraint calendar_events_title_encrypted check (title like 'enc:v1:%'),
+  constraint calendar_events_description_encrypted check (description is null or description like 'enc:v1:%'),
+  constraint calendar_events_public_note_encrypted check (public_note is null or public_note like 'enc:v1:%'),
+  constraint calendar_events_admin_note_encrypted check (admin_note is null or admin_note like 'enc:v1:%'),
+  constraint calendar_events_rejection_reason_encrypted check (rejection_reason is null or rejection_reason like 'enc:v1:%')
 );
 
 
@@ -77,7 +82,13 @@ create table public.event_change_requests (
   constraint valid_proposed_times check (
     request_type = 'delete' or proposed_all_day = true or
     (proposed_start_time is not null and proposed_end_time is not null and proposed_end_time > proposed_start_time)
-  )
+  ),
+  constraint event_change_requests_reason_encrypted check (reason like 'enc:v1:%'),
+  constraint event_change_requests_proposed_title_encrypted check (proposed_title is null or proposed_title like 'enc:v1:%'),
+  constraint event_change_requests_proposed_description_encrypted check (proposed_description is null or proposed_description like 'enc:v1:%'),
+  constraint event_change_requests_proposed_public_note_encrypted check (proposed_public_note is null or proposed_public_note like 'enc:v1:%'),
+  constraint event_change_requests_proposed_admin_note_encrypted check (proposed_admin_note is null or proposed_admin_note like 'enc:v1:%'),
+  constraint event_change_requests_rejection_reason_encrypted check (rejection_reason is null or rejection_reason like 'enc:v1:%')
 );
 
 create table public.messages (
@@ -91,7 +102,9 @@ create table public.messages (
   is_read boolean not null default false,
   is_archived boolean not null default false,
   created_at timestamptz not null default now(),
-  read_at timestamptz
+  read_at timestamptz,
+  constraint messages_title_encrypted check (title like 'enc:v1:%'),
+  constraint messages_content_encrypted check (content like 'enc:v1:%')
 );
 
 create or replace function public.delete_expired_unarchived_messages()

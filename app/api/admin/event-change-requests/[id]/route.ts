@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { formatEventLabel } from "@/lib/constants";
 import type { CalendarEvent, EventChangeRequest, Profile } from "@/types";
 import { decryptCalendarEvent, decryptEventChange, encryptCalendarEventFields, encryptEventChangeFields, encryptMessageFields } from "@/lib/security/secure-fields";
-import { assertSameOrigin, clientIp } from "@/lib/security/request";
+import { assertSameOrigin, clientIp, readJsonBody } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
 import { auditLogValues, writeAuditLogBestEffort } from "@/lib/security/audit";
@@ -22,7 +22,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     await enforceRateLimit({ purpose: "event-change-approval", identity: `${user.id}:${clientIp(request)}`, limit: 50, windowSeconds: 600 });
     const { id } = await context.params;
     resourceId = id;
-    const parsed = schema.safeParse(await request.json().catch(() => null));
+    const parsed = schema.safeParse(await readJsonBody(request));
     if (!parsed.success || (parsed.data.decision === "reject" && !parsed.data.reason?.trim())) {
       throw new SecurityError("INVALID_INPUT", 400, "거절하는 경우 거절 사유를 입력하세요.");
     }

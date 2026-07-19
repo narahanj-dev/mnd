@@ -80,3 +80,25 @@ function secretPepper() {
 export function keyedDigest(purpose: string, value: string) {
   return createHmac("sha256", secretPepper()).update(`${purpose}:${value}`).digest("hex");
 }
+
+export async function readJsonBody(request: Request, maxBytes = 16 * 1024) {
+  const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  if (contentType !== "application/json") {
+    throw new SecurityError("UNSUPPORTED_MEDIA_TYPE", 415, "JSON 형식의 요청만 허용됩니다.");
+  }
+
+  const contentLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    throw new SecurityError("PAYLOAD_TOO_LARGE", 413, "요청 내용이 너무 큽니다.");
+  }
+
+  const text = await request.text();
+  if (Buffer.byteLength(text, "utf8") > maxBytes) {
+    throw new SecurityError("PAYLOAD_TOO_LARGE", 413, "요청 내용이 너무 큽니다.");
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new SecurityError("INVALID_JSON", 400, "요청 형식이 올바르지 않습니다.");
+  }
+}

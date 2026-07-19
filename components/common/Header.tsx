@@ -31,10 +31,11 @@ const userManagementLink = {
   label: "사용자 관리",
   icon: Users,
 };
-const adminOnlyLinks = [
-  { href: "/admin/signup-requests", label: "가입 신청", icon: Inbox },
-  { href: "/admin/settings", label: "관리자 설정", icon: ShieldCheck },
-];
+const adminSettingsLink = {
+  href: "/admin/settings",
+  label: "관리자 설정",
+  icon: ShieldCheck,
+};
 
 export function Header({
   profile,
@@ -50,15 +51,9 @@ export function Header({
   const [loading, setLoading] = useState(false);
   const links =
     profile.role === "admin"
-      ? [
-          ...baseLinks,
-          approvalLink,
-          adminOnlyLinks[0],
-          userManagementLink,
-          adminOnlyLinks[1],
-        ]
+      ? [...baseLinks, approvalLink, userManagementLink, adminSettingsLink]
       : profile.role === "department_admin"
-        ? [...baseLinks, approvalLink, adminOnlyLinks[0], userManagementLink]
+        ? [...baseLinks, approvalLink, userManagementLink]
         : [...baseLinks, userManagementLink];
 
   async function logout() {

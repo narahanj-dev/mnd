@@ -12,6 +12,12 @@ import { parseJsonResponse } from "@/lib/utils";
 import type { Profile, UserRole } from "@/types";
 
 type DepartmentSummary = { name: string; userCount: number };
+type TemporaryPasswordResult = {
+  displayName: string;
+  loginId: string;
+  temporaryPassword: string;
+  expiresAt: string;
+};
 type UsersResponse = {
   users: Profile[];
   departments: DepartmentSummary[];
@@ -39,6 +45,8 @@ export function UserManagement() {
   const [resetUser, setResetUser] = useState<Profile | null>(null);
   const [resetCurrentPassword, setResetCurrentPassword] = useState("");
   const [resetError, setResetError] = useState("");
+  const [temporaryPasswordResult, setTemporaryPasswordResult] = useState<TemporaryPasswordResult | null>(null);
+  const [temporaryPasswordCopied, setTemporaryPasswordCopied] = useState(false);
   const [deleteUser, setDeleteUser] = useState<Profile | null>(null);
   const [deleteLoginId, setDeleteLoginId] = useState("");
   const [deleteCurrentPassword, setDeleteCurrentPassword] = useState("");
@@ -232,7 +240,7 @@ export function UserManagement() {
     setResetError("");
     setMessage("");
     try {
-      const result = await parseJsonResponse<{ temporaryPassword: string }>(
+      const result = await parseJsonResponse<{ temporaryPassword: string; expiresAt: string }>(
         await fetch(`/api/admin/users/${target.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -244,9 +252,13 @@ export function UserManagement() {
       );
       setResetUser(null);
       setResetCurrentPassword("");
-      setMessage(
-        `${target.display_name}님의 임시 비밀번호는 ${result.temporaryPassword}입니다. 이 화면을 닫으면 다시 확인할 수 없으며 30분 안에 로그인 후 변경해야 합니다.`,
-      );
+      setTemporaryPasswordCopied(false);
+      setTemporaryPasswordResult({
+        displayName: target.display_name,
+        loginId: target.login_id,
+        temporaryPassword: result.temporaryPassword,
+        expiresAt: result.expiresAt,
+      });
       await load(selectedDepartment);
     } catch (error) {
       setResetError(
@@ -257,6 +269,21 @@ export function UserManagement() {
     } finally {
       setBusyId(null);
     }
+  }
+
+  async function copyTemporaryPassword() {
+    if (!temporaryPasswordResult) return;
+    try {
+      await navigator.clipboard.writeText(temporaryPasswordResult.temporaryPassword);
+      setTemporaryPasswordCopied(true);
+    } catch {
+      setMessage("임시 비밀번호를 자동 복사하지 못했습니다. 화면의 비밀번호를 직접 선택해 복사하세요.");
+    }
+  }
+
+  function closeTemporaryPasswordResult() {
+    setTemporaryPasswordResult(null);
+    setTemporaryPasswordCopied(false);
   }
 
   function openDeleteModal(user: Profile) {
@@ -804,6 +831,54 @@ export function UserManagement() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {temporaryPasswordResult && !isSelfService && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4"
+          role="presentation"
+        >
+          <section
+            className="card w-full max-w-lg space-y-5 p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="temporary-password-result-title"
+          >
+            <div>
+              <h2 id="temporary-password-result-title" className="text-xl font-black">
+                임시 비밀번호 발급 완료
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                <strong>{temporaryPasswordResult.displayName}</strong>님에게 아래 아이디와 임시 비밀번호를 별도로 전달하세요.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/50">
+              <dl className="space-y-3">
+                <div>
+                  <dt className="text-xs font-bold text-amber-800 dark:text-amber-200">아이디</dt>
+                  <dd className="mt-1 break-all font-mono text-lg font-black text-slate-950 dark:text-white">{temporaryPasswordResult.loginId}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-bold text-amber-800 dark:text-amber-200">임시 비밀번호</dt>
+                  <dd className="mt-1 select-all break-all rounded-xl bg-white px-4 py-3 font-mono text-xl font-black tracking-wide text-slate-950 shadow-sm dark:bg-slate-900 dark:text-white">
+                    {temporaryPasswordResult.temporaryPassword}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+            <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm font-bold leading-6 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200">
+              이 팝업을 닫으면 임시 비밀번호를 다시 확인할 수 없습니다. {new Date(temporaryPasswordResult.expiresAt).toLocaleString("ko-KR")}까지 로그인해야 하며, 로그인 직후 새 비밀번호로 변경해야 합니다.
+            </p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={() => void copyTemporaryPassword()}>
+                {temporaryPasswordCopied ? "복사 완료" : "비밀번호 복사"}
+              </button>
+              <button type="button" className="btn-primary" onClick={closeTemporaryPasswordResult}>
+                전달 내용 확인 완료
+              </button>
+            </div>
+          </section>
         </div>
       )}
 

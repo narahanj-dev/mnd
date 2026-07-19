@@ -34,8 +34,8 @@ test('fixed temporary password and decryptable signup password storage are absen
   ].map(read).join('\n');
   assert.doesNotMatch(checked, /RESET_TEMPORARY_PASSWORD|mnd890701!/);
   assert.doesNotMatch(checked, /requested_password/);
-  assert.match(read('app/api/signup-request/route.ts'), /auth\.admin\.createUser/);
-  assert.match(read('app/api/signup-request/route.ts'), /account_status:\s*"pending"/);
+  assert.doesNotMatch(read('app/api/signup-request/route.ts'), /auth\.admin\.createUser/);
+  assert.match(read('app/api/signup-request/route.ts'), /status:\s*403/);
 });
 
 test('database policy removes direct anonymous business-data access', () => {
@@ -65,4 +65,17 @@ test('sensitive event and message fields use application encryption helpers', ()
   assert.match(read('app/api/messages/route.ts'), /decryptMessages/);
   assert.match(read('scripts/migrate-content-encryption.mjs'), /calendar_events/);
   assert.match(read('scripts/migrate-content-encryption.mjs'), /messages/);
+});
+
+
+test('department capacity thresholds and closed signup flow are wired into the UI', () => {
+  const constants = read('lib/constants.ts');
+  const calendar = read('components/calendar/CalendarBoard.tsx');
+  const loginForm = read('components/auth/LoginForm.tsx');
+  assert.match(constants, /WEEKDAY_DEPARTMENT_CAPACITY_PERCENT = 25/);
+  assert.match(constants, /WEEKEND_DEPARTMENT_CAPACITY_PERCENT = 35/);
+  assert.match(calendar, /DEPARTMENT_CAPACITY_EVENT_TYPES/);
+  assert.match(calendar, /percentage > capacityThreshold|people\.size \/ memberCount\) \* 100 > capacityThreshold/);
+  assert.doesNotMatch(loginForm, /signup-request|회원가입 신청/);
+  assert.match(read('app/signup-request/page.tsx'), /signup-disabled/);
 });

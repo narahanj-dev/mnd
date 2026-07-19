@@ -10,6 +10,22 @@ export const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
 
 export const EVENT_TYPE_VALUES = ["leave", "overnight", "weekend_outing", "weekday_outing", "anniversary"] as const;
 
+export const DEPARTMENT_CAPACITY_EVENT_TYPES: readonly EventType[] = [
+  "leave",
+  "overnight",
+  "weekend_outing",
+  "weekday_outing",
+];
+
+export const WEEKDAY_DEPARTMENT_CAPACITY_PERCENT = 25;
+export const WEEKEND_DEPARTMENT_CAPACITY_PERCENT = 35;
+
+export function departmentCapacityThreshold(day: Date) {
+  return day.getDay() === 0 || day.getDay() === 6
+    ? WEEKEND_DEPARTMENT_CAPACITY_PERCENT
+    : WEEKDAY_DEPARTMENT_CAPACITY_PERCENT;
+}
+
 export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   leave: "휴가",
   overnight: "외박",

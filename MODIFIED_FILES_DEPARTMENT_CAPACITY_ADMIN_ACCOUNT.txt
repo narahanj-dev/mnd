@@ -1,0 +1,21 @@
+수정 파일
+- README.md
+- .env.local.example
+- .env.security.example
+- lib/constants.ts
+- components/calendar/CalendarBoard.tsx
+- components/calendar/EventFormModal.tsx
+- components/auth/LoginForm.tsx
+- components/common/Header.tsx
+- components/admin/UserManagement.tsx
+- app/login/page.tsx
+- app/signup-request/page.tsx
+- app/api/signup-request/route.ts
+- app/(protected)/admin/signup-requests/page.tsx
+- app/api/admin/signup-requests/route.ts
+- app/api/admin/signup-requests/[id]/route.ts
+- tests/security/source-security.test.mjs
+- APPLY_DEPARTMENT_CAPACITY_ADMIN_ACCOUNT_UPDATE.md
+- MODIFIED_FILES_DEPARTMENT_CAPACITY_ADMIN_ACCOUNT.txt
+
+Supabase SQL 변경 없음

@@ -1,2 +1,5 @@
-import { SignupRequestList } from "@/components/admin/SignupRequestList";
-export default function SignupRequestsPage() { return <SignupRequestList />; }
+import { redirect } from "next/navigation";
+
+export default function SignupRequestsPage() {
+  redirect("/users");
+}

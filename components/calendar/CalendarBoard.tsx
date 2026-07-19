@@ -3,7 +3,13 @@
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameMonth, isToday, startOfMonth, startOfWeek } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DEPARTMENTS, EVENT_TYPE_LABELS, EVENT_TYPE_STYLES } from "@/lib/constants";
+import {
+  DEPARTMENTS,
+  DEPARTMENT_CAPACITY_EVENT_TYPES,
+  EVENT_TYPE_LABELS,
+  EVENT_TYPE_STYLES,
+  departmentCapacityThreshold,
+} from "@/lib/constants";
 import { parseJsonResponse } from "@/lib/utils";
 import type { CalendarEvent, EventType, Profile } from "@/types";
 import { EventFormModal } from "./EventFormModal";
@@ -100,8 +106,11 @@ export function CalendarBoard({ profile }: { profile: Profile }) {
           <label className="flex items-center gap-1.5 text-sm font-semibold"><input type="checkbox" checked={myOnly} onChange={(e) => setMyOnly(e.target.checked)} /> 내 일정만</label>
           <button className="btn-secondary ml-auto text-sm" onClick={() => setPreviousMonths((value) => Math.min(value + 3, 12))}>이전 달 추가</button>
         </div>
+        <p className="mt-2 text-xs font-semibold text-slate-500">
+          부서별 휴가·외박·주말외출·평일외출 인원이 평일 25%, 토·일요일 35%를 초과하면 해당 날짜가 빨간색으로 표시됩니다.
+        </p>
         {profile.role !== "admin" && (
-          <p className="mt-2 text-xs font-semibold text-slate-500">{profile.department} 부서 일정만 조회할 수 있습니다.</p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">{profile.department} 부서 일정만 조회할 수 있습니다.</p>
         )}
       </section>
 
@@ -117,22 +126,36 @@ export function CalendarBoard({ profile }: { profile: Profile }) {
                 {days.map((day) => {
                   const iso = format(day, "yyyy-MM-dd");
                   const dayEvents = filtered.filter((event) => event.start_date <= iso && event.end_date >= iso);
-                  const absencePeople = new Set(
-                    dayEvents
-                      .filter((event) => event.event_type === "leave" || event.event_type === "overnight")
-                      .map((event) => event.user_id),
+                  const capacityEvents = events.filter(
+                    (event) =>
+                      event.start_date <= iso &&
+                      event.end_date >= iso &&
+                      DEPARTMENT_CAPACITY_EVENT_TYPES.includes(event.event_type),
                   );
-                  const memberCount = department === "all"
-                    ? Object.values(departmentCounts).reduce((sum, value) => sum + value, 0)
-                    : departmentCounts[department] ?? 0;
-                  const absencePercentage = memberCount > 0 ? (absencePeople.size / memberCount) * 100 : 0;
-                  const dayCellStyle = absencePercentage >= 21
+                  const capacityDepartments = department === "all" ? allowedDepartments : [department];
+                  const capacityThreshold = departmentCapacityThreshold(day);
+                  const exceededDepartments = capacityDepartments.filter((departmentName) => {
+                    const memberCount = departmentCounts[departmentName] ?? 0;
+                    if (memberCount <= 0) return false;
+                    const people = new Set(
+                      capacityEvents
+                        .filter((event) => event.profile?.department === departmentName)
+                        .map((event) => event.user_id),
+                    );
+                    return (people.size / memberCount) * 100 > capacityThreshold;
+                  });
+                  const dayCellStyle = exceededDepartments.length > 0
                     ? "bg-red-100 hover:bg-red-200"
                     : !isSameMonth(day, month)
                       ? "bg-slate-50 text-slate-300 hover:bg-blue-50"
                       : "bg-white hover:bg-blue-50";
                   return (
-                    <button key={iso} onClick={() => setSelectedDate(iso)} className={`flex min-h-28 flex-col items-stretch justify-start border-r border-t border-slate-200 p-1.5 text-left sm:min-h-32 ${dayCellStyle}`}>
+                    <button
+                      key={iso}
+                      onClick={() => setSelectedDate(iso)}
+                      title={exceededDepartments.length > 0 ? `${exceededDepartments.join(", ")} 기준 초과 (${capacityThreshold}%)` : undefined}
+                      className={`flex min-h-28 flex-col items-stretch justify-start border-r border-t border-slate-200 p-1.5 text-left sm:min-h-32 ${dayCellStyle}`}
+                    >
                       <span className={`inline-flex h-7 w-7 shrink-0 self-start items-center justify-center rounded-full text-sm font-bold ${isToday(day) ? "bg-blue-700 text-white" : day.getDay() === 0 ? "text-rose-600" : day.getDay() === 6 ? "text-blue-600" : ""}`}>{format(day, "d")}</span>
                       <div className="mt-1 w-full space-y-1">
                         {calendarDisplayOrder.map((type) => {
@@ -158,6 +181,12 @@ export function CalendarBoard({ profile }: { profile: Profile }) {
         <EventFormModal
           date={selectedDate}
           events={filtered.filter((event) => event.start_date <= selectedDate && event.end_date >= selectedDate)}
+          capacityEvents={events.filter(
+            (event) =>
+              event.start_date <= selectedDate &&
+              event.end_date >= selectedDate &&
+              (department === "all" || event.profile?.department === department),
+          )}
           selectedDepartment={department}
           departmentCounts={departmentCounts}
           onClose={() => setSelectedDate(null)}

@@ -14,6 +14,7 @@ export default async function LoginPage({
 
   const { reason } = await searchParams;
   const sessionTimedOut = reason === "session-timeout";
+  const signupDisabled = reason === "signup-disabled";
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,#dbeafe,transparent_45%)] p-4">
@@ -31,6 +32,12 @@ export default async function LoginPage({
           </div>
         )}
 
+        {signupDisabled && (
+          <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-6 text-amber-900">
+            회원가입 신청 기능은 종료되었습니다. 신규 계정은 관리자에게 요청하세요.
+          </div>
+        )}
+
         <aside className="notice-panel mb-6 rounded-2xl p-4 text-left" aria-label="로그인 공지사항">
           <div className="notice-panel-title flex items-center gap-2">
             <Megaphone size={18} aria-hidden="true" />
@@ -38,10 +45,10 @@ export default async function LoginPage({
           </div>
           <div className="mt-3 space-y-2">
             <div className="critical-notice rounded-xl px-4 py-3 text-left text-sm font-black leading-6" role="note">
-              중요: 업데이트로 인해 회원가입 승인을 받지 못한 사용자는 재가입해 주시기 바랍니다.
+              중요: 신규 사용자 계정은 관리자가 직접 생성하여 전달합니다.
             </div>
             <div className="critical-notice rounded-xl px-4 py-3 text-left text-sm font-black leading-6" role="note">
-              중요: 기존사용자 아이디 패스워드는 관리자가 수정하였으니 문의바랍니다.
+              중요: 아이디 또는 임시 비밀번호가 필요한 경우 관리자에게 문의하시기 바랍니다.
             </div>
           </div>
         </aside>

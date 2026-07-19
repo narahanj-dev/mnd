@@ -1,7 +1,6 @@
 "use client";
 
-import { LockKeyhole, Settings, UserRoundPlus } from "lucide-react";
-import Link from "next/link";
+import { LockKeyhole, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { parseJsonResponse } from "@/lib/utils";
@@ -46,10 +45,7 @@ export function LoginForm() {
         <button className="btn-primary flex w-full items-center justify-center gap-2" disabled={loading}>
           <LockKeyhole size={18} /> {loading ? "로그인 중..." : "로그인"}
         </button>
-        <div className="grid grid-cols-2 gap-2">
-          <Link href="/signup-request" className="btn-secondary flex items-center justify-center gap-1.5 text-sm"><UserRoundPlus size={16} /> 회원가입 신청</Link>
-          <button type="button" onClick={() => setAdminOpen(true)} className="btn-secondary flex items-center justify-center gap-1.5 text-sm"><Settings size={16} /> 관리자 설정</button>
-        </div>
+        <button type="button" onClick={() => setAdminOpen(true)} className="btn-secondary flex w-full items-center justify-center gap-1.5 text-sm"><Settings size={16} /> 관리자 설정</button>
       </form>
 
       {adminOpen && (

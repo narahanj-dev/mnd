@@ -3,9 +3,11 @@
 import { X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
+  DEPARTMENT_CAPACITY_EVENT_TYPES,
   EVENT_SUBTYPE_OPTIONS,
   EVENT_TYPE_LABELS,
   EVENT_TYPE_OPTIONS,
+  departmentCapacityThreshold,
   formatEventLabel,
 } from "@/lib/constants";
 import { parseJsonResponse } from "@/lib/utils";
@@ -14,6 +16,7 @@ import type { CalendarEvent, EventType } from "@/types";
 export function EventFormModal({
   date,
   events,
+  capacityEvents,
   selectedDepartment,
   departmentCounts,
   onClose,
@@ -21,6 +24,7 @@ export function EventFormModal({
 }: {
   date: string;
   events: CalendarEvent[];
+  capacityEvents: CalendarEvent[];
   selectedDepartment: string;
   departmentCounts: Record<string, number>;
   onClose: () => void;
@@ -45,18 +49,30 @@ export function EventFormModal({
     for (const item of events) countByType.set(item.event_type, (countByType.get(item.event_type) ?? 0) + 1);
 
     const displayedPeople = new Set(events.map((item) => item.user_id));
-    const absencePeople = new Set(
-      events
-        .filter((item) => item.event_type === "leave" || item.event_type === "overnight")
-        .map((item) => item.user_id),
-    );
-    const memberCount = selectedDepartment === "all"
-      ? Object.values(departmentCounts).reduce((sum, value) => sum + value, 0)
-      : departmentCounts[selectedDepartment] ?? 0;
-    const percentage = memberCount > 0 ? (absencePeople.size / memberCount) * 100 : 0;
+    const day = new Date(`${date}T00:00:00`);
+    const threshold = departmentCapacityThreshold(day);
+    const departmentNames = selectedDepartment === "all"
+      ? Object.keys(departmentCounts)
+      : [selectedDepartment];
+    const departmentRates = departmentNames.map((departmentName) => {
+      const memberCount = departmentCounts[departmentName] ?? 0;
+      const people = new Set(
+        capacityEvents
+          .filter(
+            (item) =>
+              item.profile?.department === departmentName &&
+              DEPARTMENT_CAPACITY_EVENT_TYPES.includes(item.event_type),
+          )
+          .map((item) => item.user_id),
+      );
+      const percentage = memberCount > 0 ? (people.size / memberCount) * 100 : 0;
+      return { departmentName, memberCount, peopleCount: people.size, percentage, exceeded: percentage > threshold };
+    });
+    const selectedRate = departmentRates[0] ?? { memberCount: 0, peopleCount: 0, percentage: 0 };
+    const highestRate = departmentRates.reduce((highest, item) => item.percentage > highest.percentage ? item : highest, selectedRate);
 
-    return { countByType, displayedPeople, absencePeople, memberCount, percentage };
-  }, [departmentCounts, events, selectedDepartment]);
+    return { countByType, displayedPeople, threshold, departmentRates, selectedRate, highestRate };
+  }, [capacityEvents, date, departmentCounts, events, selectedDepartment]);
 
   function changeEventType(nextType: EventType) {
     setEventType(nextType);
@@ -99,13 +115,29 @@ export function EventFormModal({
               <p className="mt-1 text-xs text-slate-500">표시 일정 {events.length}건</p>
             </div>
             <div>
-              <p className="text-xs font-bold text-slate-500">휴가·외박 인원 비율</p>
-              <p className="mt-1 text-2xl font-black text-blue-800">{summary.percentage.toFixed(1)}%</p>
+              <p className="text-xs font-bold text-slate-500">휴가·외박·외출 인원 비율</p>
+              <p className={`mt-1 text-2xl font-black ${summary.departmentRates.some((item) => item.exceeded) ? "text-rose-700" : "text-blue-800"}`}>
+                {(selectedDepartment === "all" ? summary.highestRate.percentage : summary.selectedRate.percentage).toFixed(1)}%
+              </p>
               <p className="mt-1 text-xs text-slate-500">
-                휴가·외박 {summary.absencePeople.size}명 / {selectedDepartment === "all" ? "전체" : selectedDepartment} 부서원 {summary.memberCount}명
+                {selectedDepartment === "all"
+                  ? `부서별 최고 비율 · 기준 ${summary.threshold}% 초과 시 날짜 음영`
+                  : `${summary.selectedRate.peopleCount}명 / ${selectedDepartment} 부서원 ${summary.selectedRate.memberCount}명 · 기준 ${summary.threshold}%`}
               </p>
             </div>
           </div>
+          {selectedDepartment === "all" && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {summary.departmentRates.map((item) => (
+                <span
+                  key={item.departmentName}
+                  className={`rounded-full px-3 py-1 text-xs font-bold shadow-sm ${item.exceeded ? "bg-rose-100 text-rose-800" : "bg-white text-slate-700"}`}
+                >
+                  {item.departmentName} {item.percentage.toFixed(1)}%
+                </span>
+              ))}
+            </div>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
             {EVENT_TYPE_OPTIONS.map((option) => (
               <span key={option.value} className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700 shadow-sm">

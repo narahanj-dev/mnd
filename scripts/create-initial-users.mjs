@@ -71,23 +71,25 @@ for (const account of users) {
   if (!authUser) {
     const { data, error } = await supabase.auth.admin.createUser({
       email, password: account.password, email_confirm: true,
-      app_metadata: { role: account.role }, user_metadata: { login_id: null, display_name: null, department: null, birth_date: null, birth_month_day: null, must_change_password: true },
+      app_metadata: { role: account.role, session_version: 1 }, user_metadata: { login_id: null, display_name: null, department: null, birth_date: null, birth_month_day: null, must_change_password: true },
     });
     if (error || !data.user) throw error ?? new Error('계정 생성 실패');
     authUser = data.user;
   } else {
     const { error } = await supabase.auth.admin.updateUserById(authUser.id, {
-      password: account.password, app_metadata: { role: account.role }, user_metadata: { login_id: null, display_name: null, department: null, birth_date: null, birth_month_day: null, must_change_password: true },
+      password: account.password, app_metadata: { role: account.role, session_version: 1 }, user_metadata: { login_id: null, display_name: null, department: null, birth_date: null, birth_month_day: null, must_change_password: true },
     });
     if (error) throw error;
   }
 
   const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   const { error: profileError } = await supabase.from('profiles').upsert({
     id: authUser.id,
     login_id: encrypt(account.loginId), login_id_hash: loginHash(account.loginId),
     display_name: encrypt(account.displayName), department: account.department, role: account.role,
     account_status: 'active', must_change_password: true, password_changed_at: now,
+    session_version: 1, temporary_password_expires_at: expiresAt,
   });
   if (profileError) throw profileError;
   await supabase.from('password_history').upsert({

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
 import "./globals.css";
 
@@ -21,16 +22,12 @@ const themeInitScript = `
 })();
 `;
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="ko" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-      </head>
-      <body>
-        {children}
-        <ThemeToggle />
-      </body>
+      <head><script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeInitScript }} /></head>
+      <body>{children}<ThemeToggle /></body>
     </html>
   );
 }

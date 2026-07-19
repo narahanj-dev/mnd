@@ -1,53 +1,70 @@
-# 부서 공동 연차달력
+# 부대달력
 
-Next.js와 Supabase 기반의 부서 공동 연차·외박·외출 일정 관리 웹 애플리케이션입니다.
+Next.js 16과 Supabase를 사용하는 부서 공동 휴가·외박·외출·기념일 관리 웹 애플리케이션입니다.
 
-## 주요 보안 기능
+## 적용된 보안 기능
 
-- 아이디, 이름, 생일 월/일을 AES-256-GCM 암호문으로 DB에 저장
-- 로그인·중복검색은 비밀키 기반 HMAC 해시 사용
-- Supabase Auth 내부 이메일에 아이디 원문을 사용하지 않음
-- 회원가입 승인 전 비밀번호는 AES-256-GCM 암호문으로 임시 보관하고, 승인 후 Supabase Auth의 단방향 해시로 저장
-- 최근 비밀번호 5개 재사용 금지 및 6개월 변경주기 강제
-- 회원가입 시 출생연도 미수집, 월/일만 암호화 저장
-- 달력 이름 마스킹 적용
-- 관리자·부서관리자·일반사용자 권한 분리
-- 로그인 후 300초 카운트다운 및 만료 시 자동 로그아웃
+- 회원가입 비밀번호는 앱 DB에 저장하지 않고 가입신청 단계부터 Supabase Auth에만 전달
+- 가입승인 전 계정은 `pending` 상태로 차단하고 승인 후에만 활성화
+- 구두 전달 회원가입 코드의 서버 환경변수 검증
+- 아이디·이름·생일 월/일 및 일정 메모·요청 사유·쪽지 내용 AES-256-GCM 암호화
+- 아이디 검색·중복확인 및 접속 식별자에 HMAC 기반 블라인드 인덱스 사용
+- 고정 임시 비밀번호 제거, 계정별 무작위 임시 비밀번호와 30분 만료 적용
+- 최근 비밀번호 5개 재사용 금지와 6개월 변경주기
+- 서명된 HttpOnly 쿠키를 이용한 서버 강제 5분 유휴 세션
+- 로그인·가입신청·관리자 작업·중요 재인증 요청 횟수 제한
+- 관리자와 부서관리자 TOTP MFA(`aal2`) 강제
+- 계정 생성·권한 변경·초기화·삭제 시 현재 비밀번호 재확인
+- 모든 상태 변경 API의 동일 출처 검사(CSRF 방어)
+- CSP nonce, HSTS, 클릭재킹·MIME 스니핑 방지 등 보안 헤더
+- 브라우저의 업무 테이블 직접 접근 차단과 서버 API 권한검사
+- 관리자·부서관리자·일반사용자 및 부서 범위 권한 분리
+- 관리자 전용 필드를 일반사용자 응답에서 제거
+- 로그인·승인·권한변경·초기화·삭제 등 보안 감사로그
+- 내부 DB·Auth 오류를 사용자 응답에 직접 노출하지 않음
+- 소스 기반 자동 보안검사 포함
 
-## 설치
+## 설치 및 검사
 
 ```bash
-npm install
-npm run generate-security-keys
+npm ci
 npm run lint
 npm run build
-npm run dev
+node --test tests/security/*.test.mjs
 ```
 
-환경변수 예시는 `.env.local.example`을 참고하세요.
+한 번에 검사하려면 다음을 실행합니다.
+
+```bash
+npm run security-check
+```
+
+## 기존 운영 프로젝트 적용
+
+반드시 [`APPLY_FULL_SECURITY_UPDATE.md`](./APPLY_FULL_SECURITY_UPDATE.md)의 순서대로 적용하세요. 새 코드가 보안용 DB 함수와 테이블을 사용하므로 SQL과 배포 순서가 중요합니다.
+
+핵심 SQL:
+
+```text
+supabase/migration_20260719_full_server_security.sql
+```
+
+기존 평문 일정 메모·사유·쪽지 암호화:
+
+```bash
+npm run migrate-content-encryption
+```
 
 ## 새 Supabase 프로젝트
 
-SQL Editor에서 다음 순서로 실행합니다.
+1. `supabase/schema.sql` 실행
+2. `supabase/migration_20260719_full_server_security.sql` 실행
+3. `.env.local.example`을 참고해 환경변수 설정
+4. `npm run create-admin` 실행
+5. 애플리케이션 배포
+6. 최초 관리자 로그인 후 TOTP MFA 등록
 
-1. `supabase/schema.sql`
-2. `supabase/rls-policies.sql`
-
-그 뒤 보안정책을 충족하는 초기 관리자 정보를 `.env.local`에 입력하고 실행합니다.
-
-```bash
-npm run create-admin
-```
-
-## 기존 Supabase 프로젝트 업데이트
-
-개인정보 암호화 상세 순서는 `APPLY_SECURITY_UPDATE.md`를 따르세요.
-회원가입 비밀번호와 자동 로그아웃 추가 적용은 `APPLY_SIGNUP_PASSWORD_TIMER_UPDATE.md`를 따르세요.
-
-1. `supabase/migration_20260718_pii_encryption_password_policy.sql`
-2. 수정 코드 배포
-3. `npm run migrate-sensitive-data`
-4. `supabase/migration_20260718_pii_encryption_finalize.sql`
+`supabase/rls-policies.sql`은 최종 정책만 따로 재적용해야 할 때 사용하는 파일입니다. 통합 보안 마이그레이션을 실행했다면 동일 정책이 이미 포함됩니다.
 
 ## 필수 환경변수
 
@@ -58,6 +75,16 @@ SUPABASE_SERVICE_ROLE_KEY=
 PII_ENCRYPTION_KEY=
 PII_HASH_KEY=
 PASSWORD_HISTORY_PEPPER=
+SESSION_SIGNING_KEY=
+RATE_LIMIT_PEPPER=
+SIGNUP_INVITE_CODE=
+REQUIRE_ADMIN_MFA=true
 ```
 
-`PII_ENCRYPTION_KEY`를 잃어버리면 기존 암호화 데이터를 복호화할 수 없습니다. 운영 키는 GitHub에 올리지 말고 안전한 비밀 저장소에 별도로 백업하세요.
+새 키 생성:
+
+```bash
+npm run generate-security-keys
+```
+
+기존 운영 DB가 있다면 `PII_ENCRYPTION_KEY`, `PII_HASH_KEY`, `PASSWORD_HISTORY_PEPPER`를 새로 만들거나 교체하지 마세요. 기존 암호화 데이터와 비밀번호 이력을 사용할 수 없게 됩니다. `SUPABASE_SERVICE_ROLE_KEY`와 모든 비밀키는 GitHub에 올리지 말고 Vercel 환경변수와 별도 비밀 저장소에만 보관하세요.

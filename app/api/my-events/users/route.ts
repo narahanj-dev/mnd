@@ -3,6 +3,7 @@ import { DEPARTMENTS } from "@/lib/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { UsageUserSummary } from "@/types";
 import { decryptProfile, decryptProfiles } from "@/lib/security/pii";
+import { requireAal2 } from "@/lib/security/mfa";
 
 type DepartmentRow = {
   department: string;
@@ -11,7 +12,8 @@ type DepartmentRow = {
 
 export async function GET(request: Request) {
   try {
-    const { user, profile } = await requireUser();
+    const { user, profile, supabase } = await requireUser();
+    if (profile.role !== "user") await requireAal2(supabase);
     const admin = createAdminClient();
 
     if (profile.role === "user") {
@@ -22,7 +24,7 @@ export async function GET(request: Request) {
         .eq("account_status", "active")
         .maybeSingle();
 
-      if (error) return Response.json({ error: error.message }, { status: 400 });
+      if (error) throw error;
 
       return Response.json({
         users: data ? [decryptProfile(data) as unknown as UsageUserSummary] : [],
@@ -52,7 +54,7 @@ export async function GET(request: Request) {
     }
 
     const { data: departmentRows, error: departmentError } = await departmentQuery.returns<DepartmentRow[]>();
-    if (departmentError) return Response.json({ error: departmentError.message }, { status: 400 });
+    if (departmentError) throw departmentError;
 
     const departments = allowedDepartments.map((name) => ({
       name,
@@ -72,7 +74,7 @@ export async function GET(request: Request) {
       }
 
       const { data, error } = await usersQuery;
-      if (error) return Response.json({ error: error.message }, { status: 400 });
+      if (error) throw error;
       users = decryptProfiles(data as Record<string, unknown>[]).map((item) => item as unknown as UsageUserSummary)
         .sort((a, b) => a.display_name.localeCompare(b.display_name, "ko"));
     }

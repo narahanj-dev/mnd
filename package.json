@@ -10,7 +10,9 @@
     "create-admin": "node scripts/create-initial-users.mjs",
     "seed-demo": "node scripts/seed-demo.mjs",
     "generate-security-keys": "node scripts/generate-security-keys.mjs",
-    "migrate-sensitive-data": "node scripts/migrate-sensitive-data.mjs"
+    "migrate-sensitive-data": "node scripts/migrate-sensitive-data.mjs",
+    "migrate-content-encryption": "node scripts/migrate-content-encryption.mjs",
+    "security-check": "npm run lint && npm run build && node --test tests/security/*.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

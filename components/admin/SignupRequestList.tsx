@@ -11,7 +11,7 @@ type RequestItem = {
   department: string;
   birth_month_day: string;
   requested_login_id: string;
-  has_password: boolean;
+  account_ready: boolean;
   reason: string | null;
   status: "pending" | "approved" | "rejected";
   rejection_reason: string | null;
@@ -190,8 +190,8 @@ export function SignupRequestList() {
               <div>
                 <div className="font-black">{item.name} · {item.department}</div>
                 <p className="mt-1 text-sm text-slate-600">생일 {item.birth_month_day} · 희망 아이디 {item.requested_login_id}</p>
-                {item.has_password ? (
-                  <p className="mt-1 text-xs font-bold text-emerald-700">신청자 비밀번호 설정 완료</p>
+                {item.account_ready ? (
+                  <p className="mt-1 text-xs font-bold text-emerald-700">인증 계정 생성 및 비밀번호 설정 완료</p>
                 ) : (
                   <p className="mt-1 text-xs font-bold text-rose-700">업데이트 전 신청: 거절 후 재신청 필요</p>
                 )}
@@ -201,8 +201,8 @@ export function SignupRequestList() {
               <div className="flex gap-2">
                 <button
                   className="btn-primary"
-                  disabled={!item.has_password || processingId !== null}
-                  title={!item.has_password ? "기존 신청은 재신청이 필요합니다." : undefined}
+                  disabled={!item.account_ready || processingId !== null}
+                  title={!item.account_ready ? "업데이트 전 신청은 재신청이 필요합니다." : undefined}
                   onClick={() => void decide(item, "approve")}
                 >
                   {processingId === item.id ? "처리 중..." : "승인"}

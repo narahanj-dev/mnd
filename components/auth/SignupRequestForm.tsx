@@ -54,6 +54,22 @@ export function SignupRequestForm() {
       </fieldset>
       <label className="block text-sm font-bold">소속 부서<select name="department" className="input mt-1" required defaultValue=""><option value="" disabled>부서를 선택하세요</option>{DEPARTMENTS.map((department) => <option key={department} value={department}>{department}</option>)}</select></label>
       <label className="block text-sm font-bold">희망 아이디<input name="requestedLoginId" className="input mt-1" required minLength={4} maxLength={30} pattern="[A-Za-z0-9_-]{4,30}" autoComplete="username" /></label>
+      <label className="block text-sm font-bold">
+        회원가입 코드
+        <input
+          name="inviteCode"
+          type="password"
+          className="input mt-1"
+          required
+          minLength={4}
+          maxLength={100}
+          autoComplete="off"
+          aria-describedby="signup-invite-code-help"
+        />
+        <span id="signup-invite-code-help" className="mt-1 block text-xs font-normal text-slate-500 dark:text-slate-400">
+          관리자에게 구두로 안내받은 코드를 입력하세요. 코드는 가입신청 정보에 저장되지 않습니다.
+        </span>
+      </label>
       <div className="rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
         <p className="font-bold">{PASSWORD_POLICY_TEXT}</p>
         <p className="mt-1">연속 문자열, 전화번호형 숫자열, 잘 알려진 단어, 아이디 또는 이름이 포함된 비밀번호는 사용할 수 없습니다.</p>

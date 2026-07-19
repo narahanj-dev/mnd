@@ -19,12 +19,12 @@ export function LoginForm() {
     setLoading(true);
     setError("");
     try {
-      await parseJsonResponse(await fetch("/api/auth/login", {
+      const result = await parseJsonResponse<{ mfaRequired?: boolean }>(await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ loginId, password, adminOnly }),
       }));
-      router.replace("/calendar");
+      router.replace(result.mfaRequired ? "/mfa" : "/calendar");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "로그인에 실패했습니다.");

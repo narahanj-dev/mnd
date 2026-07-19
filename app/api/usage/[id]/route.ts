@@ -2,6 +2,8 @@ import { authErrorResponse, requireUser } from "@/lib/auth/guards";
 import { EVENT_TYPE_LABELS } from "@/lib/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptProfile } from "@/lib/security/pii";
+import { decryptCalendarEvents } from "@/lib/security/secure-fields";
+import { requireAal2 } from "@/lib/security/mfa";
 import type {
   EventType,
   Profile,
@@ -36,10 +38,10 @@ function enumerateDates(startDate: string, endDate: string) {
 
 function canViewTarget(
   viewer: Pick<Profile, "id" | "role" | "department">,
-  target: Pick<Profile, "id" | "department">,
+  target: Pick<Profile, "id" | "department" | "role">,
 ) {
   if (viewer.role === "admin") return true;
-  if (viewer.role === "department_admin") return viewer.department === target.department;
+  if (viewer.role === "department_admin") return viewer.department === target.department && target.role !== "admin";
   return viewer.id === target.id;
 }
 
@@ -48,7 +50,8 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { user, profile } = await requireUser();
+    const { user, profile, supabase } = await requireUser();
+    if (profile.role !== "user") await requireAal2(supabase);
     const { id } = await context.params;
     const admin = createAdminClient();
 
@@ -59,9 +62,7 @@ export async function GET(
       .maybeSingle();
     const target = decryptProfile(rawTarget) as Pick<Profile, "id" | "login_id" | "display_name" | "department" | "role" | "account_status"> | null;
 
-    if (targetError) {
-      return Response.json({ error: targetError.message }, { status: 400 });
-    }
+    if (targetError) throw targetError;
     if (!target || target.account_status !== "active") {
       return Response.json({ error: "사용자를 찾을 수 없습니다." }, { status: 404 });
     }
@@ -79,12 +80,11 @@ export async function GET(
       .order("start_date", { ascending: false })
       .returns<UsageEventRow[]>();
 
-    if (eventError) {
-      return Response.json({ error: eventError.message }, { status: 400 });
-    }
+    if (eventError) throw eventError;
 
+    const decryptedRows = decryptCalendarEvents(eventRows ?? []) as UsageEventRow[];
     const categories: UsageCategorySummary[] = USAGE_EVENT_TYPES.map((eventType) => {
-      const events: UsageEventDetail[] = (eventRows ?? [])
+      const events: UsageEventDetail[] = decryptedRows
         .filter((event) => event.event_type === eventType)
         .map((event) => ({
           ...event,

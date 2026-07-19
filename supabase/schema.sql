@@ -21,7 +21,9 @@ create table public.profiles (
   password_changed_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  last_login_at timestamptz
+  last_login_at timestamptz,
+  session_version integer not null default 1,
+  temporary_password_expires_at timestamptz
 );
 
 create table public.signup_requests (
@@ -31,7 +33,7 @@ create table public.signup_requests (
   birth_month_day text not null, -- MM-DD AES-256-GCM 암호문
   requested_login_id text not null, -- AES-256-GCM 암호문
   requested_login_id_hash text not null,
-  requested_password text not null, -- 승인 전까지만 보관하는 AES-256-GCM 암호문
+  auth_user_id uuid not null references public.profiles(id) on delete cascade,
   reason text, -- AES-256-GCM 암호문
   status public.request_status not null default 'pending',
   rejection_reason text,
@@ -70,7 +72,7 @@ create table public.event_change_requests (
   event_id uuid not null references public.calendar_events(id) on delete cascade,
   requester_id uuid not null references public.profiles(id) on delete cascade,
   request_type public.event_change_type not null,
-  reason text not null check (char_length(reason) between 1 and 1000),
+  reason text not null,
   proposed_event_type public.event_type,
   proposed_title text check (proposed_title is null or char_length(proposed_title) between 1 and 100),
   proposed_start_date date,
@@ -150,6 +152,7 @@ create index event_change_requests_requester_idx on public.event_change_requests
 create unique index event_change_requests_one_pending_idx on public.event_change_requests(event_id) where status = 'pending';
 create index messages_recipient_idx on public.messages(recipient_id, is_read, created_at desc);
 create index signup_requests_status_idx on public.signup_requests(status, created_at desc);
+create unique index signup_requests_auth_user_unique_idx on public.signup_requests(auth_user_id);
 create index signup_requests_approved_user_idx on public.signup_requests(approved_user_id);
 create index signup_requests_login_id_hash_idx on public.signup_requests(requested_login_id_hash);
 create unique index password_history_user_fingerprint_idx on public.password_history(user_id, password_fingerprint);

@@ -36,8 +36,12 @@ export function UserManagement() {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [resetUser, setResetUser] = useState<Profile | null>(null);
+  const [resetCurrentPassword, setResetCurrentPassword] = useState("");
+  const [resetError, setResetError] = useState("");
   const [deleteUser, setDeleteUser] = useState<Profile | null>(null);
   const [deleteLoginId, setDeleteLoginId] = useState("");
+  const [deleteCurrentPassword, setDeleteCurrentPassword] = useState("");
   const [deleteError, setDeleteError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
@@ -139,6 +143,7 @@ export function UserManagement() {
             loginId: form.get("loginId"),
             department: form.get("department"),
             role: nextRole,
+            currentPassword: form.get("currentPassword"),
           }),
         }),
       );
@@ -205,29 +210,46 @@ export function UserManagement() {
     }
   }
 
-  async function resetPassword(user: Profile) {
-    if (
-      !window.confirm(
-        `${user.display_name}님의 비밀번호를 임시 비밀번호 mnd890701!로 초기화하시겠습니까? 로그인 후 비밀번호 변경이 필요합니다.`,
-      )
-    )
-      return;
-    setBusyId(user.id);
+  function openResetModal(user: Profile) {
+    setMessage("");
+    setResetError("");
+    setResetCurrentPassword("");
+    setResetUser(user);
+  }
+
+  function closeResetModal() {
+    if (resetUser && busyId === resetUser.id) return;
+    setResetUser(null);
+    setResetCurrentPassword("");
+    setResetError("");
+  }
+
+  async function resetPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!resetUser) return;
+    const target = resetUser;
+    setBusyId(target.id);
+    setResetError("");
     setMessage("");
     try {
       const result = await parseJsonResponse<{ temporaryPassword: string }>(
-        await fetch(`/api/admin/users/${user.id}`, {
+        await fetch(`/api/admin/users/${target.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "resetPassword" }),
+          body: JSON.stringify({
+            action: "resetPassword",
+            currentPassword: resetCurrentPassword,
+          }),
         }),
       );
+      setResetUser(null);
+      setResetCurrentPassword("");
       setMessage(
-        `${user.display_name}님의 임시 비밀번호는 ${result.temporaryPassword}입니다. 로그인 후 반드시 새 비밀번호로 변경해야 합니다.`,
+        `${target.display_name}님의 임시 비밀번호는 ${result.temporaryPassword}입니다. 이 화면을 닫으면 다시 확인할 수 없으며 30분 안에 로그인 후 변경해야 합니다.`,
       );
       await load(selectedDepartment);
     } catch (error) {
-      setMessage(
+      setResetError(
         error instanceof Error
           ? error.message
           : "비밀번호 초기화에 실패했습니다.",
@@ -241,6 +263,7 @@ export function UserManagement() {
     setMessage("");
     setDeleteError("");
     setDeleteLoginId("");
+    setDeleteCurrentPassword("");
     setDeleteUser(user);
   }
 
@@ -248,6 +271,7 @@ export function UserManagement() {
     if (deleteUser && busyId === deleteUser.id) return;
     setDeleteUser(null);
     setDeleteLoginId("");
+    setDeleteCurrentPassword("");
     setDeleteError("");
   }
 
@@ -267,10 +291,12 @@ export function UserManagement() {
         await fetch(`/api/admin/users/${target.id}`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPassword: deleteCurrentPassword }),
         }),
       );
       setDeleteUser(null);
       setDeleteLoginId("");
+      setDeleteCurrentPassword("");
       setMessage(
         `${target.display_name} 계정과 관련 데이터를 모두 삭제했습니다.`,
       );
@@ -487,7 +513,7 @@ export function UserManagement() {
                                   className="btn-secondary text-xs disabled:cursor-not-allowed disabled:opacity-40"
                                   disabled={busy || !manageable}
                                   title={disabledTitle}
-                                  onClick={() => void resetPassword(user)}
+                                  onClick={() => openResetModal(user)}
                                 >
                                   비밀번호 초기화
                                 </button>
@@ -573,6 +599,16 @@ export function UserManagement() {
                 </option>
               ))}
             </select>
+            <label className="block text-sm font-bold">
+              현재 관리자 비밀번호
+              <input
+                name="currentPassword"
+                type="password"
+                className="input mt-1"
+                autoComplete="current-password"
+                required
+              />
+            </label>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
@@ -687,6 +723,16 @@ export function UserManagement() {
                 )}
               </>
             )}
+            <label className="block text-sm font-bold">
+              현재 비밀번호
+              <input
+                name="currentPassword"
+                type="password"
+                className="input mt-1"
+                autoComplete="current-password"
+                required
+              />
+            </label>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
@@ -697,6 +743,64 @@ export function UserManagement() {
               </button>
               <button className="btn-primary" disabled={busyId === editUser.id}>
                 {busyId === editUser.id ? "변경 중..." : "변경 저장"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {resetUser && !isSelfService && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4"
+          onMouseDown={(event) =>
+            event.target === event.currentTarget && closeResetModal()
+          }
+        >
+          <form
+            onSubmit={resetPassword}
+            className="card w-full max-w-lg space-y-5 p-6"
+          >
+            <div>
+              <h2 className="text-xl font-black">비밀번호 초기화</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                <strong>{resetUser.display_name}</strong>님의 비밀번호를 무작위 임시
+                비밀번호로 초기화합니다. 임시 비밀번호는 30분 동안만 유효합니다.
+              </p>
+            </div>
+            <label className="block text-sm font-bold">
+              현재 관리자 비밀번호
+              <input
+                value={resetCurrentPassword}
+                onChange={(event) => {
+                  setResetCurrentPassword(event.target.value);
+                  setResetError("");
+                }}
+                type="password"
+                className="input mt-2"
+                autoComplete="current-password"
+                required
+                autoFocus
+              />
+            </label>
+            {resetError && (
+              <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-200">
+                {resetError}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={closeResetModal}
+                disabled={busyId === resetUser.id}
+              >
+                취소
+              </button>
+              <button
+                className="btn-primary disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={busyId === resetUser.id || !resetCurrentPassword}
+              >
+                {busyId === resetUser.id ? "초기화 중..." : "비밀번호 초기화"}
               </button>
             </div>
           </form>
@@ -836,6 +940,20 @@ export function UserManagement() {
                 required
               />
             </label>
+            <label className="block text-sm font-bold">
+              현재 관리자 비밀번호
+              <input
+                value={deleteCurrentPassword}
+                onChange={(event) => {
+                  setDeleteCurrentPassword(event.target.value);
+                  setDeleteError("");
+                }}
+                type="password"
+                className="input mt-2"
+                autoComplete="current-password"
+                required
+              />
+            </label>
             {deleteError && (
               <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
                 {deleteError}
@@ -854,7 +972,8 @@ export function UserManagement() {
                 className="btn-danger disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={
                   busyId === deleteUser.id ||
-                  deleteLoginId.trim() !== deleteUser.login_id
+                  deleteLoginId.trim() !== deleteUser.login_id ||
+                  !deleteCurrentPassword
                 }
               >
                 {busyId === deleteUser.id ? "삭제 중..." : "영구 삭제"}

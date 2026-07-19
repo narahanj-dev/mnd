@@ -3,6 +3,7 @@ import { DEPARTMENTS } from "@/lib/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { CalendarEvent, EventChangeRequest, Profile } from "@/types";
 import { decryptProfileRelation } from "@/lib/security/pii";
+import { decryptCalendarEvent, decryptEventChange } from "@/lib/security/secure-fields";
 
 type ManagedProfile = Pick<Profile, "id" | "department" | "role">;
 
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
       .select("id,department,role")
       .in("department", allowedDepartments);
 
-    if (profileError) return Response.json({ error: profileError.message }, { status: 400 });
+    if (profileError) throw profileError;
 
     const managedProfiles = ((managedProfileData ?? []) as ManagedProfile[]).filter((target) =>
       canManageUser(profile, target),
@@ -58,16 +59,16 @@ export async function GET(request: Request) {
         .order("created_at", { ascending: false }),
     ]);
 
-    if (eventError) return Response.json({ error: eventError.message }, { status: 400 });
-    if (requestError) return Response.json({ error: requestError.message }, { status: 400 });
+    if (eventError) throw eventError;
+    if (requestError) throw requestError;
 
-    const events = ((eventData ?? []) as CalendarEvent[]).map((event) => ({
+    const events = ((eventData ?? []) as CalendarEvent[]).map((rawEvent) => { const event = decryptCalendarEvent(rawEvent); return ({
       ...event,
       profile: decryptProfileRelation(event.profile as Record<string, unknown> | Record<string, unknown>[] | null),
-    })) as CalendarEvent[];
-    const requests = ((requestData ?? []) as EventChangeRequest[]).map((changeRequest) => {
+    }); }) as CalendarEvent[];
+    const requests = ((requestData ?? []) as EventChangeRequest[]).map((rawChangeRequest) => { const changeRequest = decryptEventChange(rawChangeRequest);
       const event = changeRequest.event ? {
-        ...changeRequest.event,
+        ...decryptCalendarEvent(changeRequest.event),
         profile: decryptProfileRelation(changeRequest.event.profile as Record<string, unknown> | Record<string, unknown>[] | null),
       } : undefined;
       return {

@@ -24,6 +24,8 @@ export interface Profile {
   created_at: string;
   updated_at: string;
   last_login_at: string | null;
+  session_version: number;
+  temporary_password_expires_at: string | null;
 }
 
 export interface CalendarEvent {

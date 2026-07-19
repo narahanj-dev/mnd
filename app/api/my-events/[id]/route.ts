@@ -1,6 +1,8 @@
 import { authErrorResponse, canManageUser, requireUser } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptProfile } from "@/lib/security/pii";
+import { decryptCalendarEvents, decryptEventChanges } from "@/lib/security/secure-fields";
+import { requireAal2 } from "@/lib/security/mfa";
 import type { CalendarEvent, EventChangeRequest, Profile, UsageUserSummary } from "@/types";
 
 const MY_EVENT_TYPES = ["leave", "overnight", "weekend_outing", "weekday_outing"] as const;
@@ -31,7 +33,8 @@ function canViewTarget(
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const { user, profile } = await requireUser();
+    const { user, profile, supabase } = await requireUser();
+    if (profile.role !== "user") await requireAal2(supabase);
     const { id } = await context.params;
     const url = new URL(request.url);
     const year = Number(url.searchParams.get("year"));
@@ -49,7 +52,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       .maybeSingle();
     const target = decryptProfile(rawTarget) as TargetProfile | null;
 
-    if (targetError) return Response.json({ error: targetError.message }, { status: 400 });
+    if (targetError) throw targetError;
     if (!target || target.account_status !== "active") {
       return Response.json({ error: "사용자를 찾을 수 없습니다." }, { status: 404 });
     }
@@ -67,9 +70,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       .order("start_date", { ascending: false })
       .returns<CalendarEvent[]>();
 
-    if (eventError) return Response.json({ error: eventError.message }, { status: 400 });
+    if (eventError) throw eventError;
 
-    const allEvents = eventRows ?? [];
+    const allEvents = decryptCalendarEvents(eventRows ?? []);
     const eventIds = allEvents.map((event) => event.id);
     let allRequests: EventChangeRequest[] = [];
 
@@ -81,8 +84,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         .order("created_at", { ascending: false })
         .returns<EventChangeRequest[]>();
 
-      if (requestError) return Response.json({ error: requestError.message }, { status: 400 });
-      allRequests = requestRows ?? [];
+      if (requestError) throw requestError;
+      allRequests = decryptEventChanges(requestRows ?? []);
     }
 
     const requestsByEvent = new Map<string, EventChangeRequest[]>();
@@ -109,14 +112,29 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       role: target.role,
     };
 
+    const safeEvents = events.map((event) => {
+      if (profile.role !== "user") return event;
+      const safeEvent: Record<string, unknown> = { ...event };
+      delete safeEvent.admin_note;
+      delete safeEvent.approved_by;
+      return safeEvent;
+    });
+    const safeRequests = requests.map((changeRequest) => {
+      if (profile.role !== "user") return changeRequest;
+      const safeRequest: Record<string, unknown> = { ...changeRequest };
+      delete safeRequest.proposed_admin_note;
+      delete safeRequest.processed_by;
+      return safeRequest;
+    });
+
     return Response.json({
       user: responseUser,
       viewerId: user.id,
       viewerRole: profile.role,
       year,
       month,
-      events,
-      requests,
+      events: safeEvents,
+      requests: safeRequests,
     });
   } catch (error) {
     return authErrorResponse(error);

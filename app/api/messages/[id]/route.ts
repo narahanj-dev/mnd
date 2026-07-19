@@ -3,13 +3,15 @@ import { requireUser, authErrorResponse } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { assertSameOrigin } from "@/lib/security/request";
 import { SecurityError } from "@/lib/security/errors";
+import { requireAal2 } from "@/lib/security/mfa";
 
 const schema = z.object({ isRead: z.boolean().optional(), isArchived: z.boolean().optional() });
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     assertSameOrigin(request);
-    const { user } = await requireUser();
+    const { user, profile, supabase } = await requireUser();
+    if (profile.role !== "user") await requireAal2(supabase);
     const { id } = await context.params;
     const parsed = schema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) throw new SecurityError("INVALID_INPUT", 400, "요청을 확인하세요.");

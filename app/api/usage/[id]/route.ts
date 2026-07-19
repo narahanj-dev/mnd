@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptProfile } from "@/lib/security/pii";
 import { decryptCalendarEvents } from "@/lib/security/secure-fields";
 import { requireAal2 } from "@/lib/security/mfa";
+import { MAX_EVENT_DURATION_DAYS, inclusiveDays } from "@/lib/security/date-limits";
 import type {
   EventType,
   Profile,
@@ -25,15 +26,14 @@ type UsageEventRow = Pick<
 >;
 
 function enumerateDates(startDate: string, endDate: string) {
-  const start = new Date(`${startDate}T00:00:00Z`);
-  const end = new Date(`${endDate}T00:00:00Z`);
-  const dates: string[] = [];
-
-  for (let cursor = start; cursor <= end; cursor = new Date(cursor.getTime() + 86_400_000)) {
-    dates.push(cursor.toISOString().slice(0, 10));
+  const dayCount = inclusiveDays(startDate, endDate);
+  if (dayCount > MAX_EVENT_DURATION_DAYS) {
+    throw new Error("허용 범위를 초과한 일정 데이터가 있습니다. 관리자에게 문의하세요.");
   }
-
-  return dates;
+  const start = new Date(`${startDate}T00:00:00Z`);
+  return Array.from({ length: dayCount }, (_, index) =>
+    new Date(start.getTime() + index * 86_400_000).toISOString().slice(0, 10),
+  );
 }
 
 function canViewTarget(

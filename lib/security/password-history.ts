@@ -4,7 +4,9 @@ import { SecurityError } from "@/lib/security/errors";
 
 function pepper() {
   const value = process.env.PASSWORD_HISTORY_PEPPER?.trim();
-  if (!value) throw new Error("PASSWORD_HISTORY_PEPPER 환경변수가 설정되지 않았습니다.");
+  if (!value || value.length < 32) {
+    throw new Error("PASSWORD_HISTORY_PEPPER 환경변수는 32자 이상이어야 합니다.");
+  }
   return value;
 }
 
@@ -28,24 +30,31 @@ export async function ensurePasswordNotReused(admin: AdminClient, userId: string
   }
 }
 
-export async function recordPassword(
+export async function insertPasswordRecord(
   admin: AdminClient,
   userId: string,
   password: string,
   options?: { allowExisting?: boolean },
 ) {
-  const passwordFingerprint = fingerprint(userId, password);
   const payload = {
     user_id: userId,
-    password_fingerprint: passwordFingerprint,
+    password_fingerprint: fingerprint(userId, password),
     ...(options?.allowExisting ? { created_at: new Date().toISOString() } : {}),
   };
   const query = options?.allowExisting
-    ? admin.from("password_history").upsert(payload, { onConflict: "user_id,password_fingerprint" })
-    : admin.from("password_history").insert(payload);
-  const { error } = await query;
-  if (error) throw new SecurityError("PASSWORD_HISTORY_ERROR", 500, "비밀번호 이력을 저장하지 못했습니다.");
+    ? admin.from("password_history").upsert(payload, { onConflict: "user_id,password_fingerprint" }).select("id").single()
+    : admin.from("password_history").insert(payload).select("id").single();
+  const { data, error } = await query;
+  if (error || !data?.id) throw new SecurityError("PASSWORD_HISTORY_ERROR", 500, "비밀번호 이력을 저장하지 못했습니다.");
+  return String(data.id);
+}
 
+export async function removePasswordRecord(admin: AdminClient, recordId: string) {
+  const { error } = await admin.from("password_history").delete().eq("id", recordId);
+  if (error) console.error("[password-history-rollback]", error);
+}
+
+export async function prunePasswordHistory(admin: AdminClient, userId: string) {
   const { data: history, error: historyError } = await admin
     .from("password_history")
     .select("id")
@@ -57,6 +66,16 @@ export async function recordPassword(
     const { error: deleteError } = await admin.from("password_history").delete().in("id", obsolete);
     if (deleteError) throw new SecurityError("PASSWORD_HISTORY_ERROR", 500, "비밀번호 이력을 정리하지 못했습니다.");
   }
+}
+
+export async function recordPassword(
+  admin: AdminClient,
+  userId: string,
+  password: string,
+  options?: { allowExisting?: boolean },
+) {
+  await insertPasswordRecord(admin, userId, password, options);
+  await prunePasswordHistory(admin, userId);
 }
 
 export function passwordExpired(passwordChangedAt: string | null | undefined) {

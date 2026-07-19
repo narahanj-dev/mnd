@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHmac, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
 
 const VERSION = "enc:v1";
 const AUTH_EMAIL_DOMAIN = "leave-calendar.local";
@@ -16,9 +16,11 @@ function keyFromEnv(name: string) {
   if (/^[0-9a-f]{64}$/i.test(raw)) return Buffer.from(raw, "hex");
   try {
     const decoded = Buffer.from(raw, "base64");
-    if (decoded.length === 32) return decoded;
+    if (decoded.length === 32 && decoded.toString("base64").replace(/=+$/, "") === raw.replace(/=+$/, "")) {
+      return decoded;
+    }
   } catch {}
-  return createHash("sha256").update(raw, "utf8").digest();
+  throw new Error(`${name} 환경변수는 32바이트 Base64 또는 64자리 16진수 키여야 합니다.`);
 }
 
 function encryptionKey() {

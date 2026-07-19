@@ -3,7 +3,7 @@ import { authErrorResponse, canManageUser, requireUser, requireUserManager } fro
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DEPARTMENTS } from "@/lib/constants";
 import { decryptProfile, encryptPii, encryptProfileValues, loginIdHash, loginIdToAuthEmail, sanitizedAuthUserMetadata } from "@/lib/security/pii";
-import { recordPassword } from "@/lib/security/password-history";
+import { insertPasswordRecord, prunePasswordHistory, removePasswordRecord } from "@/lib/security/password-history";
 import type { Profile } from "@/types";
 import { generateTemporaryPassword } from "@/lib/security/temporary-password";
 import { encryptMessageFields } from "@/lib/security/secure-fields";
@@ -62,13 +62,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       const temporaryPassword = generateTemporaryPassword();
       const nextVersion = (targetProfile.session_version ?? 1) + 1;
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      const historyRecordId = await insertPasswordRecord(admin, id, temporaryPassword, { allowExisting: true });
       const { error: profileUpdateError } = await admin.from("profiles").update({
         must_change_password: true,
         temporary_password_expires_at: expiresAt,
         password_changed_at: new Date().toISOString(),
         session_version: nextVersion,
       }).eq("id", id);
-      if (profileUpdateError) throw profileUpdateError;
+      if (profileUpdateError) {
+        await removePasswordRecord(admin, historyRecordId);
+        throw profileUpdateError;
+      }
 
       const { error: authError } = await admin.auth.admin.updateUserById(id, {
         password: temporaryPassword,
@@ -82,11 +86,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           password_changed_at: targetProfile.password_changed_at,
           session_version: targetProfile.session_version ?? 1,
         }).eq("id", id);
+        await removePasswordRecord(admin, historyRecordId);
         throw authError;
       }
 
-      try { await recordPassword(admin, id, temporaryPassword, { allowExisting: true }); }
-      catch (historyError) { console.error("[reset-password-history]", historyError); }
+      try { await prunePasswordHistory(admin, id); }
+      catch (historyError) { console.error("[reset-password-history-prune]", historyError); }
 
       await admin.from("messages").insert(encryptMessageFields({
         sender_id: actingUser.id,
@@ -96,7 +101,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         message_type: "password_reset",
       }));
       await writeAuditLog({ request, action: "user.password_reset", actorId: actingUser.id, targetUserId: id, success: true });
-      return Response.json({ ok: true, temporaryPassword, expiresAt });
+      return Response.json({ ok: true, temporaryPassword, expiresAt }, { headers: { "Cache-Control": "no-store, max-age=0" } });
     }
 
     if (actingProfile.role === "user" && (parsed.data.department !== targetProfile.department || parsed.data.role !== targetProfile.role)) {

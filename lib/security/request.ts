@@ -6,11 +6,20 @@ function canonicalOrigin(value: string) {
   return `${url.protocol}//${url.host}`;
 }
 
+function configuredAppOrigin(request: Request) {
+  const configured = process.env.APP_ORIGIN?.trim();
+  if (configured) return canonicalOrigin(configured);
+  if (process.env.NODE_ENV === "production") {
+    throw new SecurityError("APP_ORIGIN_CONFIG", 503, "서버 요청 출처 설정을 확인하세요.");
+  }
+  return canonicalOrigin(request.url);
+}
+
 export function assertSameOrigin(request: Request) {
   const method = request.method.toUpperCase();
   if (["GET", "HEAD", "OPTIONS"].includes(method)) return;
 
-  const expected = canonicalOrigin(request.url);
+  const expected = configuredAppOrigin(request);
   const origin = request.headers.get("origin");
   const referer = request.headers.get("referer");
   const fetchSite = request.headers.get("sec-fetch-site");
@@ -36,17 +45,38 @@ export function assertSameOrigin(request: Request) {
   throw new SecurityError("CSRF_MISSING_ORIGIN", 403, "요청 출처를 확인할 수 없습니다.");
 }
 
+function firstIp(value: string | null) {
+  return value?.split(",")[0]?.trim() || null;
+}
+
 export function clientIp(request: Request) {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return forwarded || request.headers.get("x-real-ip")?.trim() || "unknown";
+  // Hosting provider가 직접 작성하는 헤더를 우선 사용합니다.
+  const providerIp = firstIp(request.headers.get("x-vercel-forwarded-for"))
+    || firstIp(request.headers.get("cf-connecting-ip"))
+    || firstIp(request.headers.get("fly-client-ip"));
+  if (providerIp) return providerIp;
+
+  // 자체 프록시를 운영하는 경우에만 일반 전달 헤더를 신뢰합니다.
+  if (process.env.TRUST_PROXY_HEADERS === "true") {
+    return firstIp(request.headers.get("x-forwarded-for"))
+      || firstIp(request.headers.get("x-real-ip"))
+      || "unknown";
+  }
+  return "unknown";
 }
 
 export function userAgent(request: Request) {
   return request.headers.get("user-agent")?.slice(0, 500) || "unknown";
 }
 
-export function keyedDigest(purpose: string, value: string) {
+function secretPepper() {
   const pepper = process.env.RATE_LIMIT_PEPPER?.trim() || process.env.PII_HASH_KEY?.trim();
-  if (!pepper) throw new SecurityError("SECURITY_CONFIG", 503, "서버 보안 설정을 확인하세요.");
-  return createHmac("sha256", pepper).update(`${purpose}:${value}`).digest("hex");
+  if (!pepper || pepper.length < 32) {
+    throw new SecurityError("SECURITY_CONFIG", 503, "서버 보안 설정을 확인하세요.");
+  }
+  return pepper;
+}
+
+export function keyedDigest(purpose: string, value: string) {
+  return createHmac("sha256", secretPepper()).update(`${purpose}:${value}`).digest("hex");
 }

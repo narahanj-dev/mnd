@@ -9,6 +9,7 @@ import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
 import { requireAal2 } from "@/lib/security/mfa";
 import { writeAuditLog } from "@/lib/security/audit";
+import { assertEventDuration } from "@/lib/security/date-limits";
 
 const schema = z.object({
   action: z.enum(["update", "delete"]), reason: z.string().trim().min(1).max(1000),
@@ -38,7 +39,7 @@ function buildUpdate(current: EventRow, value: z.infer<typeof schema>, canSetAdm
 
 function validateUpdate(update: ReturnType<typeof buildUpdate>) {
   if (!isValidEventTitle(update.event_type, update.title)) return "선택한 표시 항목의 종류를 확인하세요.";
-  if (update.end_date < update.start_date) return "종료일은 시작일보다 빠를 수 없습니다.";
+  try { assertEventDuration(update.start_date, update.end_date); } catch (error) { return error instanceof SecurityError ? error.publicMessage : "일정 기간을 확인하세요."; }
   if (!update.all_day && (!update.start_time || !update.end_time || update.end_time <= update.start_time)) return "시간 일정을 올바르게 입력하세요.";
   return null;
 }
@@ -50,7 +51,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     assertSameOrigin(request);
     const { user, profile, supabase } = await requireUser();
     actorId = user.id;
-    if (profile.role === "admin") await requireAal2(supabase);
+    if (profile.role !== "user") await requireAal2(supabase);
     await enforceRateLimit({ purpose: "event-change", identity: `${user.id}:${clientIp(request)}`, limit: 30, windowSeconds: 600 });
     const { id } = await context.params;
     resourceId = id;

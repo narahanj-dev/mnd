@@ -7,18 +7,16 @@ import { assertSameOrigin, clientIp } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
 import { writeAuditLog } from "@/lib/security/audit";
+import { requireAal2 } from "@/lib/security/mfa";
 
 export async function GET(request: Request) {
   try {
-    const { user } = await requireUser();
+    const { user, profile, supabase } = await requireUser();
+    if (profile.role !== "user") await requireAal2(supabase);
     const url = new URL(request.url);
     const archived = url.searchParams.get("archived") === "true";
     const unread = url.searchParams.get("unread") === "true";
     const admin = createAdminClient();
-    const expiresBefore = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
-    const { error: cleanupError } = await admin.from("messages").delete().eq("is_archived", false).lt("created_at", expiresBefore);
-    if (cleanupError) console.error("[message-cleanup]", cleanupError);
-
     let query = admin.from("messages")
       .select("id,sender_id,recipient_id,related_event_id,title,content,message_type,is_read,is_archived,created_at,read_at,sender:profiles!messages_sender_id_fkey(display_name)")
       .eq("recipient_id", user.id).eq("is_archived", archived).order("created_at", { ascending: false });
@@ -29,7 +27,7 @@ export async function GET(request: Request) {
       ...message,
       sender: decryptProfileRelation(message.sender as Record<string, unknown> | Record<string, unknown>[] | null),
     }));
-    return Response.json({ messages });
+    return Response.json({ messages }, { headers: { "Cache-Control": "no-store, max-age=0" } });
   } catch (error) { return authErrorResponse(error); }
 }
 

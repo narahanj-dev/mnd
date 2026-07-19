@@ -8,13 +8,13 @@ import {
   isAppSessionExpired,
 } from "@/lib/security/session-cookie";
 
-export { APP_SESSION_COOKIE_NAME, SESSION_IDLE_SECONDS } from "@/lib/security/session-cookie";
+export { APP_SESSION_COOKIE_NAME, SESSION_IDLE_SECONDS, SESSION_ABSOLUTE_SECONDS } from "@/lib/security/session-cookie";
 
 export async function startAppSession(userId: string, sessionVersion: number) {
   const store = await cookies();
   store.set(
     APP_SESSION_COOKIE_NAME,
-    encodeAppSession({ userId, sessionVersion, touchedAt: Date.now() }),
+    encodeAppSession({ userId, sessionVersion, startedAt: Date.now(), touchedAt: Date.now() }),
     appSessionCookieOptions(),
   );
 }

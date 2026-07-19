@@ -2,7 +2,7 @@ import { z } from "zod";
 import { requireAdmin, authErrorResponse } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptPii, encryptProfileValues, loginIdHash, loginIdToAuthEmail, sanitizedAuthUserMetadata } from "@/lib/security/pii";
-import { ensurePasswordNotReused, recordPassword } from "@/lib/security/password-history";
+import { ensurePasswordNotReused, insertPasswordRecord, prunePasswordHistory, removePasswordRecord } from "@/lib/security/password-history";
 import { validatePassword } from "@/lib/security/password-policy";
 import { assertSameOrigin, clientIp } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
@@ -59,8 +59,39 @@ export async function PATCH(request: Request) {
     };
     if (parsed.data.loginId) { authUpdate.email = loginIdToAuthEmail(parsed.data.loginId); authUpdate.email_confirm = true; }
     if (parsed.data.password) authUpdate.password = parsed.data.password;
+    const historyRecordId = parsed.data.password
+      ? await insertPasswordRecord(admin, user.id, parsed.data.password)
+      : null;
+
     const { error: authError } = await admin.auth.admin.updateUserById(user.id, authUpdate);
-    if (authError) throw authError;
+    if (authError) {
+      if (historyRecordId) await removePasswordRecord(admin, historyRecordId);
+      throw authError;
+    }
+
+    const rollbackAuth = async () => {
+      const rollback: Record<string, unknown> = {
+        app_metadata: authData.user.app_metadata,
+        user_metadata: authData.user.user_metadata,
+      };
+      if (authData.user.email) {
+        rollback.email = authData.user.email;
+        rollback.email_confirm = true;
+      }
+      if (parsed.data.password) rollback.password = parsed.data.currentPassword;
+      const { error } = await admin.auth.admin.updateUserById(user.id, rollback);
+      if (error) console.error("[admin-settings-auth-rollback]", error);
+    };
+    const rollbackProfile = async () => {
+      const { error } = await admin.from("profiles").update({
+        ...encryptProfileValues({ login_id: profile.login_id, display_name: profile.display_name }),
+        must_change_password: profile.must_change_password,
+        temporary_password_expires_at: profile.temporary_password_expires_at,
+        password_changed_at: profile.password_changed_at,
+        session_version: profile.session_version ?? 1,
+      }).eq("id", user.id);
+      if (error) console.error("[admin-settings-profile-rollback]", error);
+    };
 
     const profileUpdate: Record<string, unknown> = { session_version: nextVersion };
     if (parsed.data.loginId) Object.assign(profileUpdate, encryptProfileValues({ login_id: parsed.data.loginId }));
@@ -68,18 +99,31 @@ export async function PATCH(request: Request) {
     if (parsed.data.password) Object.assign(profileUpdate, { must_change_password: false, temporary_password_expires_at: null, password_changed_at: new Date().toISOString() });
     const { error: profileError } = await admin.from("profiles").update(profileUpdate).eq("id", user.id);
     if (profileError) {
-      await admin.auth.admin.updateUserById(user.id, { email: authData.user.email, app_metadata: authData.user.app_metadata });
+      await rollbackAuth();
+      if (historyRecordId) await removePasswordRecord(admin, historyRecordId);
       throw profileError;
     }
 
-    if (parsed.data.password) await recordPassword(admin, user.id, parsed.data.password);
     if (parsed.data.displayName) {
-      await admin.from("admin_settings").upsert({ admin_user_id: user.id, display_name: encryptPii(parsed.data.displayName) }, { onConflict: "admin_user_id" });
+      const { error: settingsError } = await admin.from("admin_settings").upsert(
+        { admin_user_id: user.id, display_name: encryptPii(parsed.data.displayName) },
+        { onConflict: "admin_user_id" },
+      );
+      if (settingsError) {
+        await rollbackProfile();
+        await rollbackAuth();
+        if (historyRecordId) await removePasswordRecord(admin, historyRecordId);
+        throw settingsError;
+      }
+    }
+    if (historyRecordId) {
+      try { await prunePasswordHistory(admin, user.id); }
+      catch (historyError) { console.error("[admin-settings-password-history-prune]", historyError); }
     }
     if (rotateSession) await startAppSession(user.id, nextVersion);
 
     await writeAuditLog({ request, action: "admin.settings_update", actorId: user.id, targetUserId: user.id, success: true, metadata: { login_changed: Boolean(parsed.data.loginId), password_changed: Boolean(parsed.data.password), name_changed: Boolean(parsed.data.displayName) } });
-    return Response.json({ ok: true });
+    return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store, max-age=0" } });
   } catch (error) {
     await writeAuditLog({ request, action: "admin.settings_update", actorId, targetUserId: actorId, success: false });
     return authErrorResponse(error);

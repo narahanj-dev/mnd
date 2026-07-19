@@ -1,6 +1,13 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { clientIp, keyedDigest, userAgent } from "@/lib/security/request";
 
+export function auditLogValues(request: Request) {
+  return {
+    ipHash: keyedDigest("audit-ip", clientIp(request)),
+    userAgent: userAgent(request),
+  };
+}
+
 export async function writeAuditLog(options: {
   request: Request;
   action: string;
@@ -17,8 +24,8 @@ export async function writeAuditLog(options: {
       target_user_id: options.targetUserId ?? null,
       target_resource_id: options.targetResourceId ?? null,
       success: options.success,
-      ip_hash: keyedDigest("audit-ip", clientIp(options.request)),
-      user_agent: userAgent(options.request),
+      ip_hash: auditLogValues(options.request).ipHash,
+      user_agent: auditLogValues(options.request).userAgent,
       metadata: options.metadata ?? {},
     });
   } catch (error) {

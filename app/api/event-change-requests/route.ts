@@ -2,10 +2,12 @@ import { requireUser, authErrorResponse } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptProfileRelation } from "@/lib/security/pii";
 import { decryptCalendarEvent, decryptEventChange } from "@/lib/security/secure-fields";
+import { requireAal2 } from "@/lib/security/mfa";
 
 export async function GET(request: Request) {
   try {
-    const { user, profile } = await requireUser();
+    const { user, profile, supabase } = await requireUser();
+    if (profile.role !== "user") await requireAal2(supabase);
     const url = new URL(request.url);
     const status = url.searchParams.get("status");
     const admin = createAdminClient();
@@ -26,6 +28,6 @@ export async function GET(request: Request) {
         event: eventRelation ? { ...eventRelation, profile: decryptProfileRelation(eventRelation.profile as Record<string, unknown> | Record<string, unknown>[] | null) } : eventRelation,
       };
     });
-    return Response.json({ requests });
+    return Response.json({ requests }, { headers: { "Cache-Control": "no-store, max-age=0" } });
   } catch (error) { return authErrorResponse(error); }
 }

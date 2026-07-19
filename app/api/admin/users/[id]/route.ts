@@ -2,7 +2,7 @@ import { z } from "zod";
 import { authErrorResponse, canManageUser, requireUser, requireUserManager } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DEPARTMENTS } from "@/lib/constants";
-import { decryptProfile, encryptPii, encryptProfileValues, loginIdHash, loginIdToAuthEmail, sanitizedAuthUserMetadata } from "@/lib/security/pii";
+import { decryptProfile, encryptProfileValues, loginIdHash, loginIdToAuthEmail, sanitizedAuthUserMetadata } from "@/lib/security/pii";
 import { insertPasswordRecord, prunePasswordHistory, removePasswordRecord } from "@/lib/security/password-history";
 import type { Profile } from "@/types";
 import { generateTemporaryPassword } from "@/lib/security/temporary-password";
@@ -10,7 +10,7 @@ import { encryptMessageFields } from "@/lib/security/secure-fields";
 import { assertSameOrigin, clientIp } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
-import { writeAuditLog } from "@/lib/security/audit";
+import { beginPrivilegedAudit, completePrivilegedAudit, writeAuditLogBestEffort } from "@/lib/security/audit";
 import { requireAal2 } from "@/lib/security/mfa";
 import { verifyCurrentPassword } from "@/lib/security/reauth";
 
@@ -30,6 +30,7 @@ const patchSchema = z.discriminatedUnion("action", [updateSchema, resetPasswordS
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   let actorId: string | null = null;
   let targetId: string | null = null;
+  let privilegedAuditId: string | null = null;
   try {
     assertSameOrigin(request);
     const { user: actingUser, profile: actingProfile, supabase } = await requireUser();
@@ -59,6 +60,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (authReadError || !authData.user) throw new SecurityError("AUTH_NOT_FOUND", 404, "인증 계정을 찾을 수 없습니다.");
 
     if (parsed.data.action === "resetPassword") {
+      privilegedAuditId = await beginPrivilegedAudit({
+        request, action: "user.password_reset", actorId: actingUser.id, targetUserId: id,
+      });
       const temporaryPassword = generateTemporaryPassword();
       const nextVersion = (targetProfile.session_version ?? 1) + 1;
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -100,7 +104,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         content: "관리자가 비밀번호를 초기화했습니다. 임시 비밀번호는 30분 동안만 유효하며 로그인 후 즉시 변경해야 합니다.",
         message_type: "password_reset",
       }));
-      await writeAuditLog({ request, action: "user.password_reset", actorId: actingUser.id, targetUserId: id, success: true });
+      await completePrivilegedAudit(privilegedAuditId, true);
       return Response.json({ ok: true, temporaryPassword, expiresAt }, { headers: { "Cache-Control": "no-store, max-age=0" } });
     }
 
@@ -110,7 +114,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (actingUser.id === id && parsed.data.role !== actingProfile.role) {
       throw new SecurityError("SELF_ROLE_CHANGE", 400, "현재 로그인한 계정의 권한은 직접 변경할 수 없습니다.");
     }
-    if (actingProfile.role === "department_admin" && parsed.data.role === "admin") throw new SecurityError("FORBIDDEN", 403, "관리자 권한은 관리자만 부여할 수 있습니다.");
+    if (actingProfile.role === "department_admin" && parsed.data.role !== "user") {
+      throw new SecurityError("FORBIDDEN", 403, "부서관리자는 일반사용자 계정만 관리할 수 있습니다.");
+    }
     if (actingProfile.role === "department_admin" && parsed.data.department !== actingProfile.department) throw new SecurityError("FORBIDDEN", 403, "부서관리자는 사용자를 다른 부서로 이동할 수 없습니다.");
 
     const nextHash = loginIdHash(parsed.data.loginId);
@@ -118,6 +124,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       const { data: duplicate } = await admin.from("profiles").select("id").eq("login_id_hash", nextHash).neq("id", id).maybeSingle();
       if (duplicate) throw new SecurityError("DUPLICATE_LOGIN", 409, "이미 사용 중인 아이디입니다.");
     }
+
+    privilegedAuditId = await beginPrivilegedAudit({
+      request, action: "user.identity_update", actorId: actingUser.id, targetUserId: id,
+      metadata: {
+        role_changed: parsed.data.role !== targetProfile.role,
+        department_changed: parsed.data.department !== targetProfile.department,
+      },
+    });
 
     const securitySensitiveChange = parsed.data.role !== targetProfile.role || parsed.data.department !== targetProfile.department;
     const nextVersion = securitySensitiveChange ? (targetProfile.session_version ?? 1) + 1 : (targetProfile.session_version ?? 1);
@@ -140,16 +154,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       throw profileUpdateError;
     }
 
-    await admin.from("signup_requests").update({
-      requested_login_id: encryptPii(parsed.data.loginId),
-      requested_login_id_hash: nextHash,
-      department: parsed.data.department,
-    }).eq("auth_user_id", id);
-
-    await writeAuditLog({ request, action: "user.identity_update", actorId: actingUser.id, targetUserId: id, success: true, metadata: { role_changed: parsed.data.role !== targetProfile.role, department_changed: parsed.data.department !== targetProfile.department } });
+    await completePrivilegedAudit(privilegedAuditId, true, {
+      role_changed: parsed.data.role !== targetProfile.role,
+      department_changed: parsed.data.department !== targetProfile.department,
+    });
     return Response.json({ ok: true });
   } catch (error) {
-    await writeAuditLog({ request, action: "user.update", actorId, targetUserId: targetId, success: false });
+    if (privilegedAuditId) await completePrivilegedAudit(privilegedAuditId, false);
+    else await writeAuditLogBestEffort({ request, action: "user.update", actorId, targetUserId: targetId, success: false });
     return authErrorResponse(error);
   }
 }
@@ -157,6 +169,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   let actorId: string | null = null;
   let targetId: string | null = null;
+  let privilegedAuditId: string | null = null;
   try {
     assertSameOrigin(request);
     const { user: actingUser, profile: actingProfile } = await requireUserManager();
@@ -176,15 +189,19 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     if (!canManageUser(actingProfile, targetProfile)) throw new SecurityError("FORBIDDEN", 403, "해당 사용자를 삭제할 권한이 없습니다.");
     await enforceRateLimit({ purpose: "privileged-reauth", identity: `${actingUser.id}:${clientIp(request)}`, limit: 5, windowSeconds: 1800 });
     await verifyCurrentPassword({ userId: actingUser.id, email: actingUser.email, password: deleteInput.data.currentPassword });
+    privilegedAuditId = await beginPrivilegedAudit({
+      request, action: "user.delete", actorId: actingUser.id, targetUserId: id,
+    });
 
     const { error: authDeleteError } = await admin.auth.admin.deleteUser(id);
     if (authDeleteError && !/not found|does not exist/i.test(authDeleteError.message)) throw authDeleteError;
     if (authDeleteError) await admin.from("profiles").delete().eq("id", id);
 
-    await writeAuditLog({ request, action: "user.delete", actorId: actingUser.id, targetUserId: id, success: true });
+    await completePrivilegedAudit(privilegedAuditId, true);
     return Response.json({ ok: true });
   } catch (error) {
-    await writeAuditLog({ request, action: "user.delete", actorId, targetUserId: targetId, success: false });
+    if (privilegedAuditId) await completePrivilegedAudit(privilegedAuditId, false);
+    else await writeAuditLogBestEffort({ request, action: "user.delete", actorId, targetUserId: targetId, success: false });
     return authErrorResponse(error);
   }
 }

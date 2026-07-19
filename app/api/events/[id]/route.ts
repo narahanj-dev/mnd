@@ -8,7 +8,7 @@ import { assertSameOrigin, clientIp } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
 import { requireAal2 } from "@/lib/security/mfa";
-import { writeAuditLog } from "@/lib/security/audit";
+import { beginPrivilegedAudit, completePrivilegedAudit, writeAuditLog, writeAuditLogBestEffort } from "@/lib/security/audit";
 import { assertEventDuration } from "@/lib/security/date-limits";
 
 const schema = z.object({
@@ -47,6 +47,7 @@ function validateUpdate(update: ReturnType<typeof buildUpdate>) {
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   let actorId: string | null = null;
   let resourceId: string | null = null;
+  let privilegedAuditId: string | null = null;
   try {
     assertSameOrigin(request);
     const { user, profile, supabase } = await requireUser();
@@ -68,6 +69,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     if (profile.role === "admin") {
       if (parsed.data.action === "delete") {
+        privilegedAuditId = await beginPrivilegedAudit({
+          request, action: "event.admin_delete", actorId: user.id,
+          targetUserId: current.user_id, targetResourceId: id,
+        });
         const { error } = await admin.from("calendar_events").update({ status: "cancelled" }).eq("id", id);
         if (error) throw error;
         await admin.from("messages").insert(encryptMessageFields({
@@ -76,13 +81,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           content: `관리자가 일정 '${formatEventLabel(current.event_type, current.title)}' (${current.start_date}~${current.end_date})을 삭제했습니다.\n처리 사유: ${parsed.data.reason}`,
           message_type: "event_admin_deleted",
         }));
-        await writeAuditLog({ request, action: "event.admin_delete", actorId: user.id, targetUserId: current.user_id, targetResourceId: id, success: true });
+        await completePrivilegedAudit(privilegedAuditId, true);
         return Response.json({ ok: true, message: "일정이 삭제되었으며 사용자에게 사유를 전송했습니다." });
       }
 
       const update = buildUpdate(current, parsed.data, true);
       const validationError = validateUpdate(update);
       if (validationError) throw new SecurityError("INVALID_EVENT", 400, validationError);
+      privilegedAuditId = await beginPrivilegedAudit({
+        request, action: "event.admin_update", actorId: user.id,
+        targetUserId: current.user_id, targetResourceId: id,
+      });
       const { error } = await admin.from("calendar_events").update(encryptCalendarEventFields(update)).eq("id", id);
       if (error) throw error;
       await admin.from("messages").insert(encryptMessageFields({
@@ -91,7 +100,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         content: `관리자가 일정 '${formatEventLabel(current.event_type, current.title)}'을 수정했습니다.\n변경 일정: '${formatEventLabel(update.event_type, update.title)}' (${update.start_date}~${update.end_date})\n처리 사유: ${parsed.data.reason}`,
         message_type: "event_admin_updated",
       }));
-      await writeAuditLog({ request, action: "event.admin_update", actorId: user.id, targetUserId: current.user_id, targetResourceId: id, success: true });
+      await completePrivilegedAudit(privilegedAuditId, true);
       return Response.json({ ok: true, message: "일정이 수정되었으며 사용자에게 사유를 전송했습니다." });
     }
 
@@ -138,7 +147,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       message: parsed.data.action === "update" ? "일정 수정 요청이 접수되었습니다. 관리자 승인 전까지 기존 일정이 유지됩니다." : "일정 삭제 요청이 접수되었습니다. 관리자 승인 전까지 달력에 일정이 유지됩니다.",
     });
   } catch (error) {
-    await writeAuditLog({ request, action: "event.change", actorId, targetResourceId: resourceId, success: false });
+    if (privilegedAuditId) await completePrivilegedAudit(privilegedAuditId, false);
+    else await writeAuditLogBestEffort({ request, action: "event.change", actorId, targetResourceId: resourceId, success: false });
     return authErrorResponse(error);
   }
 }

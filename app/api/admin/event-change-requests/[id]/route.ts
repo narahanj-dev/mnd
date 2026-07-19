@@ -7,7 +7,7 @@ import { decryptCalendarEvent, decryptEventChange, encryptCalendarEventFields, e
 import { assertSameOrigin, clientIp } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
-import { auditLogValues, writeAuditLog } from "@/lib/security/audit";
+import { auditLogValues, writeAuditLogBestEffort } from "@/lib/security/audit";
 
 const schema = z.object({ decision: z.enum(["approve", "reject"]), reason: z.string().max(1000).optional() });
 type TargetProfile = Pick<Profile, "role" | "department">;
@@ -42,6 +42,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (!changeRequest.event) throw new SecurityError("NOT_FOUND", 404, "연결된 일정을 찾을 수 없습니다.");
     changeRequest.event = decryptCalendarEvent(changeRequest.event);
 
+    if (changeRequest.event.user_id === user.id || changeRequest.requester_id === user.id) {
+      throw new SecurityError("SELF_APPROVAL_FORBIDDEN", 403, "본인이 신청한 일정 변경은 직접 승인할 수 없습니다.");
+    }
+
     const targetProfile = changeRequest.event.profile as TargetProfile | null;
     if (!targetProfile || !canManageUser(profile, targetProfile)) {
       throw new SecurityError("FORBIDDEN", 403, "소속 부서원의 일정만 처리할 수 있습니다.");
@@ -49,6 +53,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     const approved = parsed.data.decision === "approve";
     const encryptedUpdate = encryptCalendarEventFields({
+      title: changeRequest.proposed_title,
       description: changeRequest.proposed_description,
       public_note: changeRequest.proposed_public_note,
       admin_note: changeRequest.proposed_admin_note,
@@ -73,7 +78,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       p_decision: parsed.data.decision,
       p_rejection_reason: encryptedRequestDecision.rejection_reason,
       p_event_type: approved && changeRequest.request_type === "update" ? changeRequest.proposed_event_type : null,
-      p_title: approved && changeRequest.request_type === "update" ? changeRequest.proposed_title : null,
+      p_title: approved && changeRequest.request_type === "update" ? encryptedUpdate.title : null,
       p_start_date: approved && changeRequest.request_type === "update" ? changeRequest.proposed_start_date : null,
       p_end_date: approved && changeRequest.request_type === "update" ? changeRequest.proposed_end_date : null,
       p_all_day: approved && changeRequest.request_type === "update" ? changeRequest.proposed_all_day : null,
@@ -98,7 +103,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store, max-age=0" } });
   } catch (error) {
-    await writeAuditLog({ request, action: "event_change.decision", actorId, targetResourceId: resourceId, success: false });
+    await writeAuditLogBestEffort({ request, action: "event_change.decision", actorId, targetResourceId: resourceId, success: false });
     return authErrorResponse(error);
   }
 }

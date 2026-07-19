@@ -7,7 +7,7 @@ import { decryptCalendarEvent, encryptCalendarEventFields, encryptMessageFields 
 import { assertSameOrigin, clientIp } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
-import { auditLogValues, writeAuditLog } from "@/lib/security/audit";
+import { auditLogValues, writeAuditLogBestEffort } from "@/lib/security/audit";
 
 const schema = z.object({ decision: z.enum(["approve", "reject"]), reason: z.string().max(1000).optional() });
 type TargetProfile = Pick<Profile, "role" | "department">;
@@ -36,6 +36,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const event = decryptCalendarEvent(rawEvent);
     if (eventError) throw eventError;
     if (!event) throw new SecurityError("NOT_FOUND", 404, "승인할 일정을 찾을 수 없습니다.");
+
+    if (event.user_id === user.id) {
+      throw new SecurityError("SELF_APPROVAL_FORBIDDEN", 403, "본인이 신청한 일정은 직접 승인할 수 없습니다.");
+    }
 
     const targetProfile = event.profile as TargetProfile | null;
     if (!targetProfile || !canManageUser(profile, targetProfile)) {
@@ -75,7 +79,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store, max-age=0" } });
   } catch (error) {
-    await writeAuditLog({ request, action: "event.approval", actorId, targetResourceId: resourceId, success: false });
+    await writeAuditLogBestEffort({ request, action: "event.approval", actorId, targetResourceId: resourceId, success: false });
     return authErrorResponse(error);
   }
 }

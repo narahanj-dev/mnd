@@ -26,28 +26,11 @@ create table public.profiles (
   temporary_password_expires_at timestamptz
 );
 
-create table public.signup_requests (
-  id uuid primary key default gen_random_uuid(),
-  name text not null, -- AES-256-GCM 암호문
-  department text not null,
-  birth_month_day text not null, -- MM-DD AES-256-GCM 암호문
-  requested_login_id text not null, -- AES-256-GCM 암호문
-  requested_login_id_hash text not null,
-  auth_user_id uuid not null references public.profiles(id) on delete cascade,
-  reason text, -- AES-256-GCM 암호문
-  status public.request_status not null default 'pending',
-  rejection_reason text,
-  processed_by uuid references public.profiles(id) on delete set null,
-  approved_user_id uuid references public.profiles(id) on delete cascade,
-  processed_at timestamptz,
-  created_at timestamptz not null default now()
-);
-
 create table public.calendar_events (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
   event_type public.event_type not null,
-  title text not null check (char_length(title) between 1 and 100),
+  title text not null, -- AES-256-GCM 암호문
   start_date date not null,
   end_date date not null,
   all_day boolean not null default true,
@@ -74,7 +57,7 @@ create table public.event_change_requests (
   request_type public.event_change_type not null,
   reason text not null,
   proposed_event_type public.event_type,
-  proposed_title text check (proposed_title is null or char_length(proposed_title) between 1 and 100),
+  proposed_title text, -- AES-256-GCM 암호문
   proposed_start_date date,
   proposed_end_date date,
   proposed_all_day boolean,
@@ -151,10 +134,6 @@ create index event_change_requests_event_idx on public.event_change_requests(eve
 create index event_change_requests_requester_idx on public.event_change_requests(requester_id, created_at desc);
 create unique index event_change_requests_one_pending_idx on public.event_change_requests(event_id) where status = 'pending';
 create index messages_recipient_idx on public.messages(recipient_id, is_read, created_at desc);
-create index signup_requests_status_idx on public.signup_requests(status, created_at desc);
-create unique index signup_requests_auth_user_unique_idx on public.signup_requests(auth_user_id);
-create index signup_requests_approved_user_idx on public.signup_requests(approved_user_id);
-create index signup_requests_login_id_hash_idx on public.signup_requests(requested_login_id_hash);
 create unique index password_history_user_fingerprint_idx on public.password_history(user_id, password_fingerprint);
 create index password_history_user_created_idx on public.password_history(user_id, created_at desc);
 
@@ -200,7 +179,4 @@ begin
 end;
 $$;
 
--- 회원가입 승인 API가 Auth 사용자 생성 후 profiles 행을 직접 생성합니다.
 -- Auth 트리거는 DB 제약 변경 시 전체 사용자 생성을 막을 수 있어 연결하지 않습니다.
-comment on function public.handle_new_user() is
-  '현재 앱에서는 회원가입 승인 API가 profiles 행을 직접 생성합니다. auth.users 자동 트리거는 사용하지 않습니다.';

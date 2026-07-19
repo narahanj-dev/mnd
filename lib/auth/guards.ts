@@ -72,7 +72,7 @@ export function canManageUser(
   return (
     manager.role === "department_admin" &&
     manager.department === target.department &&
-    target.role !== "admin"
+    target.role === "user"
   );
 }
 

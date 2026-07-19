@@ -142,34 +142,3 @@ export function decryptProfileRelation<T>(relation: T): T {
   if (Array.isArray(relation)) return relation.map((row) => decryptProfile(row)) as T;
   return decryptProfile(relation);
 }
-
-export function encryptSignupRequestValues(values: {
-  name?: string;
-  requested_login_id?: string;
-  birth_month_day?: string;
-  reason?: string | null;
-}) {
-  const result: Row = {};
-  if (values.name !== undefined) result.name = encryptPii(values.name);
-  if (values.requested_login_id !== undefined) {
-    result.requested_login_id = encryptPii(values.requested_login_id);
-    result.requested_login_id_hash = loginIdHash(values.requested_login_id);
-  }
-  if (values.birth_month_day !== undefined) {
-    result.birth_month_day = encryptPii(birthMonthDay(values.birth_month_day));
-  }
-  if (values.reason !== undefined) result.reason = values.reason ? encryptPii(values.reason) : null;
-  return result;
-}
-
-export function decryptSignupRequest<T>(row: T): T {
-  if (!row || typeof row !== "object") return row;
-  const value = row as Row;
-  return {
-    ...value,
-    ...(typeof value.name === "string" ? { name: decryptPii(value.name) } : {}),
-    ...(typeof value.requested_login_id === "string" ? { requested_login_id: decryptPii(value.requested_login_id) } : {}),
-    ...(typeof value.birth_month_day === "string" ? { birth_month_day: decryptPii(value.birth_month_day) } : {}),
-    ...(typeof value.reason === "string" ? { reason: decryptPii(value.reason) } : {}),
-  } as T;
-}

@@ -5,10 +5,10 @@ import { decryptProfile, legacyLoginIdToAuthEmail, loginIdToAuthEmail } from "@/
 import { passwordExpired } from "@/lib/security/password-history";
 import type { Profile } from "@/types";
 import { assertSameOrigin, clientIp } from "@/lib/security/request";
-import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { assertRateLimitAvailable, enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError, safeErrorResponse } from "@/lib/security/errors";
 import { startAppSession } from "@/lib/security/session";
-import { writeAuditLog } from "@/lib/security/audit";
+import { writeAuditLogBestEffort } from "@/lib/security/audit";
 
 const schema = z.object({
   loginId: z.string().regex(/^[A-Za-z0-9_-]{4,30}$/),
@@ -22,12 +22,18 @@ export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
     const ip = clientIp(request);
-    await enforceRateLimit({ purpose: "login-ip", identity: ip, limit: 10, windowSeconds: 600 });
+    const knownIp = ip !== "unknown";
+    if (knownIp) {
+      await assertRateLimitAvailable({ purpose: "login-ip", identity: ip, limit: 100, windowSeconds: 600 });
+    }
 
     const parsed = schema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) throw new SecurityError("INVALID_LOGIN", 400, "아이디와 비밀번호를 확인하세요.");
+    if (!parsed.success) {
+      if (knownIp) await enforceRateLimit({ purpose: "login-ip", identity: ip, limit: 100, windowSeconds: 600 });
+      throw new SecurityError("INVALID_LOGIN", 400, "아이디와 비밀번호를 확인하세요.");
+    }
     auditLoginId = parsed.data.loginId.toLowerCase();
-    await enforceRateLimit({ purpose: "login-id", identity: auditLoginId, limit: 6, windowSeconds: 600 });
+    await assertRateLimitAvailable({ purpose: "login-id", identity: auditLoginId, limit: 6, windowSeconds: 600 });
 
     const supabase = await createClient();
     let { data, error } = await supabase.auth.signInWithPassword({
@@ -42,7 +48,11 @@ export async function POST(request: Request) {
       data = legacyResult.data;
       error = legacyResult.error;
     }
-    if (error || !data.user) throw new SecurityError("INVALID_CREDENTIALS", 401, "아이디 또는 비밀번호가 올바르지 않습니다.");
+    if (error || !data.user) {
+      await enforceRateLimit({ purpose: "login-id", identity: auditLoginId, limit: 6, windowSeconds: 600 });
+      if (knownIp) await enforceRateLimit({ purpose: "login-ip", identity: ip, limit: 100, windowSeconds: 600 });
+      throw new SecurityError("INVALID_CREDENTIALS", 401, "아이디 또는 비밀번호가 올바르지 않습니다.");
+    }
     userId = data.user.id;
 
     const admin = createAdminClient();
@@ -75,10 +85,10 @@ export async function POST(request: Request) {
       mfaRequired = process.env.REQUIRE_ADMIN_MFA !== "false" && aal?.currentLevel !== "aal2";
     }
 
-    await writeAuditLog({ request, action: "auth.login", actorId: userId, targetUserId: userId, success: true, metadata: { role: profile.role } });
+    await writeAuditLogBestEffort({ request, action: "auth.login", actorId: userId, targetUserId: userId, success: true, metadata: { role: profile.role } });
     return Response.json({ ok: true, role: profile.role, mustChangePassword, mfaRequired });
   } catch (error) {
-    await writeAuditLog({ request, action: "auth.login", actorId: userId, targetUserId: userId, success: false, metadata: { login_id_hash_source: auditLoginId !== "invalid" } });
+    await writeAuditLogBestEffort({ request, action: "auth.login", actorId: userId, targetUserId: userId, success: false, metadata: { login_id_hash_source: auditLoginId !== "invalid" } });
     return safeErrorResponse(error, "login");
   }
 }

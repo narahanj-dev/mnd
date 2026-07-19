@@ -8,7 +8,7 @@ import { assertSameOrigin, clientIp } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
 import { startAppSession } from "@/lib/security/session";
-import { writeAuditLog } from "@/lib/security/audit";
+import { beginPrivilegedAudit, completePrivilegedAudit, writeAuditLogBestEffort } from "@/lib/security/audit";
 import { verifyCurrentPassword } from "@/lib/security/reauth";
 
 const schema = z.object({
@@ -20,6 +20,7 @@ const schema = z.object({
 
 export async function PATCH(request: Request) {
   let actorId: string | null = null;
+  let privilegedAuditId: string | null = null;
   try {
     assertSameOrigin(request);
     const { user, profile } = await requireAdmin();
@@ -47,6 +48,15 @@ export async function PATCH(request: Request) {
       const { data: duplicate } = await admin.from("profiles").select("id").eq("login_id_hash", loginIdHash(parsed.data.loginId)).neq("id", user.id).maybeSingle();
       if (duplicate) throw new SecurityError("DUPLICATE_LOGIN", 409, "이미 사용 중인 아이디입니다.");
     }
+
+    privilegedAuditId = await beginPrivilegedAudit({
+      request, action: "admin.settings_update", actorId: user.id, targetUserId: user.id,
+      metadata: {
+        login_changed: Boolean(parsed.data.loginId),
+        password_changed: Boolean(parsed.data.password),
+        name_changed: Boolean(parsed.data.displayName),
+      },
+    });
 
     const { data: authData, error: authReadError } = await admin.auth.admin.getUserById(user.id);
     if (authReadError || !authData.user) throw new SecurityError("AUTH_NOT_FOUND", 404, "인증 계정을 찾을 수 없습니다.");
@@ -122,10 +132,15 @@ export async function PATCH(request: Request) {
     }
     if (rotateSession) await startAppSession(user.id, nextVersion);
 
-    await writeAuditLog({ request, action: "admin.settings_update", actorId: user.id, targetUserId: user.id, success: true, metadata: { login_changed: Boolean(parsed.data.loginId), password_changed: Boolean(parsed.data.password), name_changed: Boolean(parsed.data.displayName) } });
+    await completePrivilegedAudit(privilegedAuditId, true, {
+      login_changed: Boolean(parsed.data.loginId),
+      password_changed: Boolean(parsed.data.password),
+      name_changed: Boolean(parsed.data.displayName),
+    });
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store, max-age=0" } });
   } catch (error) {
-    await writeAuditLog({ request, action: "admin.settings_update", actorId, targetUserId: actorId, success: false });
+    if (privilegedAuditId) await completePrivilegedAudit(privilegedAuditId, false);
+    else await writeAuditLogBestEffort({ request, action: "admin.settings_update", actorId, targetUserId: actorId, success: false });
     return authErrorResponse(error);
   }
 }

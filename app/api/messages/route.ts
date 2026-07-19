@@ -6,7 +6,7 @@ import { decryptMessages, encryptMessageFields } from "@/lib/security/secure-fie
 import { assertSameOrigin, clientIp } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
-import { writeAuditLog } from "@/lib/security/audit";
+import { writeAuditLog, writeAuditLogBestEffort } from "@/lib/security/audit";
 import { requireAal2 } from "@/lib/security/mfa";
 
 export async function GET(request: Request) {
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     await writeAuditLog({ request, action: "message.send", actorId: user.id, targetUserId: parsed.data.recipientId, targetResourceId: data.id, success: true });
     return Response.json({ ok: true });
   } catch (error) {
-    await writeAuditLog({ request, action: "message.send", actorId, success: false });
+    await writeAuditLogBestEffort({ request, action: "message.send", actorId, success: false });
     return authErrorResponse(error);
   }
 }

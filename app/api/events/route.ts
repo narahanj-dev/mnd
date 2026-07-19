@@ -4,11 +4,11 @@ import { DEPARTMENTS, EVENT_TYPE_VALUES, isValidEventTitle } from "@/lib/constan
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { CalendarEvent, Profile } from "@/types";
 import { decryptProfile, maskDisplayName } from "@/lib/security/pii";
-import { encryptCalendarEventFields } from "@/lib/security/secure-fields";
+import { decryptCalendarEvents, encryptCalendarEventFields } from "@/lib/security/secure-fields";
 import { assertSameOrigin, clientIp, keyedDigest } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
-import { writeAuditLog } from "@/lib/security/audit";
+import { writeAuditLog, writeAuditLogBestEffort } from "@/lib/security/audit";
 import { requireAal2 } from "@/lib/security/mfa";
 import { assertCalendarRange, assertEventDuration, parseIsoDate } from "@/lib/security/date-limits";
 
@@ -99,7 +99,7 @@ export async function GET(request: Request) {
         .order("start_date", { ascending: true })
         .returns<CalendarRow[]>();
       if (error) throw error;
-      rows = data ?? [];
+      rows = decryptCalendarEvents(data ?? []) as CalendarRow[];
     }
 
     const events = rows.flatMap((event) => {
@@ -195,7 +195,7 @@ export async function POST(request: Request) {
     await writeAuditLog({ request, action: "event.create", actorId: user.id, targetUserId: user.id, targetResourceId: data.id, success: true });
     return noStoreJson({ event: data, message: "일정 추가 요청이 접수되었습니다. 관리자의 승인이 완료될 때까지 기다려 주세요." }, { status: 201 });
   } catch (error) {
-    await writeAuditLog({ request, action: "event.create", actorId, targetUserId: actorId, success: false });
+    await writeAuditLogBestEffort({ request, action: "event.create", actorId, targetUserId: actorId, success: false });
     return authErrorResponse(error);
   }
 }

@@ -97,27 +97,6 @@ async function migrateProfiles() {
   }
 }
 
-async function migrateSignupRequests() {
-  const { data: rows, error } = await admin.from('signup_requests').select('*');
-  if (error) throw error;
-  for (const row of rows ?? []) {
-    const loginId = decrypt(row.requested_login_id);
-    const name = decrypt(row.name);
-    const monthDay = row.birth_month_day ? decrypt(row.birth_month_day) : row.birth_date?.slice(5) ?? null;
-    const reason = decrypt(row.reason);
-    const update = {
-      name: encrypt(name),
-      requested_login_id: encrypt(loginId),
-      requested_login_id_hash: loginId ? loginHash(loginId) : null,
-      birth_month_day: monthDay ? encrypt(monthDay) : null,
-      reason: reason ? encrypt(reason) : null,
-    };
-    const { error: updateError } = await admin.from('signup_requests').update(update).eq('id', row.id);
-    if (updateError) throw updateError;
-    console.log(`가입신청 암호화 완료: ${row.id}`);
-  }
-}
-
 async function migrateAdminSettings() {
   const { data: rows, error } = await admin.from('admin_settings').select('*');
   if (error) throw error;
@@ -129,6 +108,5 @@ async function migrateAdminSettings() {
 }
 
 await migrateProfiles();
-await migrateSignupRequests();
 await migrateAdminSettings();
-console.log('개인정보 암호화 마이그레이션이 완료되었습니다. 이제 finalize SQL을 실행하세요.');
+console.log('프로필 및 관리자 설정 개인정보 암호화 마이그레이션이 완료되었습니다.');

@@ -106,7 +106,7 @@ export function UserManagement() {
     if (currentUserRole === "admin") return true;
     if (currentUserRole === "department_admin") {
       return (
-        target.department === currentUserDepartment && target.role !== "admin"
+        target.department === currentUserDepartment && target.role === "user"
       );
     }
     return target.id === currentUserId;
@@ -733,8 +733,9 @@ export function UserManagement() {
                     defaultValue={editUser.role}
                     required
                   >
-                    {USER_ROLE_OPTIONS.filter(
-                      (role) => isFullAdmin || role.value !== "admin",
+                    {(isFullAdmin
+                      ? USER_ROLE_OPTIONS
+                      : USER_ROLE_OPTIONS.filter((role) => role.value === "user")
                     ).map((role) => (
                       <option key={role.value} value={role.value}>
                         {role.label}
@@ -744,8 +745,8 @@ export function UserManagement() {
                 </label>
                 {!isFullAdmin && (
                   <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-                    부서관리자는 본인 부서 안에서만 사용자를 관리할 수 있으며
-                    관리자 권한은 부여할 수 없습니다.
+                    부서관리자는 본인 부서의 일반사용자 계정만 관리할 수 있습니다.
+                    관리자·부서관리자 지정과 해제는 최고관리자만 할 수 있습니다.
                   </p>
                 )}
               </>

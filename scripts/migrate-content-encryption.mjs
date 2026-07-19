@@ -42,10 +42,9 @@ function encrypt(value) {
 }
 
 const targets = [
-  ['calendar_events', ['description', 'public_note', 'admin_note', 'rejection_reason']],
-  ['event_change_requests', ['reason', 'proposed_description', 'proposed_public_note', 'proposed_admin_note', 'rejection_reason']],
+  ['calendar_events', ['title', 'description', 'public_note', 'admin_note', 'rejection_reason']],
+  ['event_change_requests', ['reason', 'proposed_title', 'proposed_description', 'proposed_public_note', 'proposed_admin_note', 'rejection_reason']],
   ['messages', ['title', 'content']],
-  ['signup_requests', ['reason', 'rejection_reason']],
 ];
 
 for (const [table, fields] of targets) {
@@ -63,4 +62,4 @@ for (const [table, fields] of targets) {
   console.log(`${table} 민감내용 암호화 완료`);
 }
 
-console.log('일정 메모, 요청 사유, 쪽지 내용 암호화가 완료되었습니다.');
+console.log('일정 제목·메모, 요청 사유, 쪽지 내용 암호화가 완료되었습니다.');

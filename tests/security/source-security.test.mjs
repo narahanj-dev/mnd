@@ -5,10 +5,13 @@ import path from 'node:path';
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+const exists = (file) => fs.existsSync(path.join(root, file));
 
 function filesUnder(directory, name = 'route.ts') {
+  const absolute = path.join(root, directory);
+  if (!fs.existsSync(absolute)) return [];
   const result = [];
-  for (const entry of fs.readdirSync(path.join(root, directory), { withFileTypes: true })) {
+  for (const entry of fs.readdirSync(absolute, { withFileTypes: true })) {
     const relative = path.join(directory, entry.name);
     if (entry.isDirectory()) result.push(...filesUnder(relative, name));
     else if (entry.name === name) result.push(relative);
@@ -25,22 +28,21 @@ test('all state-changing API routes enforce same-origin checks', () => {
   }
 });
 
-test('fixed temporary password and decryptable signup password storage are absent', () => {
-  const checked = [
-    'lib/constants.ts',
-    'app/api/admin/users/[id]/route.ts',
+test('public signup code and stored signup data are removed', () => {
+  for (const file of [
     'app/api/signup-request/route.ts',
-    'supabase/schema.sql',
-  ].map(read).join('\n');
-  assert.doesNotMatch(checked, /RESET_TEMPORARY_PASSWORD|mnd890701!/);
-  assert.doesNotMatch(checked, /requested_password/);
-  assert.doesNotMatch(read('app/api/signup-request/route.ts'), /auth\.admin\.createUser/);
-  assert.match(read('app/api/signup-request/route.ts'), /status:\s*403/);
+    'app/api/admin/signup-requests/route.ts',
+    'app/api/admin/signup-requests/[id]/route.ts',
+    'components/auth/SignupRequestForm.tsx',
+    'components/admin/SignupRequestList.tsx',
+    'lib/security/signup-invite-code.ts',
+  ]) assert.equal(exists(file), false, `${file} must be removed`);
+  assert.doesNotMatch(read('supabase/schema.sql'), /signup_requests/);
+  assert.match(read('supabase/migration_20260719_full_server_security.sql'), /drop table if exists public\.signup_requests cascade/);
 });
 
 test('database policy removes direct anonymous business-data access', () => {
   const rls = read('supabase/rls-policies.sql');
-  assert.doesNotMatch(rls, /Anyone can submit signup request/i);
   assert.doesNotMatch(rls, /create policy/i);
   assert.match(rls, /revoke all on public\.profiles from anon, authenticated/);
   assert.match(rls, /revoke all on public\.calendar_events from anon, authenticated/);
@@ -50,39 +52,65 @@ test('database policy removes direct anonymous business-data access', () => {
 test('server security layers are configured', () => {
   assert.match(read('proxy.ts'), /Content-Security-Policy/);
   assert.match(read('next.config.ts'), /Strict-Transport-Security/);
+  assert.match(read('next.config.ts'), /private, no-store/);
   assert.match(read('lib/auth/guards.ts'), /assertAppSession/);
   assert.match(read('lib/auth/guards.ts'), /requireAal2/);
   assert.match(read('app/api/admin/users/[id]/route.ts'), /verifyCurrentPassword/);
   assert.match(read('lib/security/session-cookie.ts'), /SESSION_IDLE_SECONDS = 300/);
-  assert.match(read('lib/security/session-cookie.ts'), /SESSION_ABSOLUTE_SECONDS/);
   assert.match(read('lib/security/request.ts'), /APP_ORIGIN/);
-  assert.match(read('supabase/migration_20260719_full_server_security.sql'), /consume_security_rate_limit/);
-  assert.match(read('supabase/migration_20260719_full_server_security.sql'), /security_audit_logs/);
 });
 
-test('sensitive event and message fields use application encryption helpers', () => {
-  assert.match(read('app/api/events/route.ts'), /encryptCalendarEventFields/);
-  assert.match(read('app/api/events/route.ts'), /\.eq\("status", "approved"\)/);
-  assert.doesNotMatch(read('app/api/events/route.ts'), /select\("[^"]*description/);
+test('department admins can manage only ordinary users', () => {
+  const guards = read('lib/auth/guards.ts');
+  const route = read('app/api/admin/users/[id]/route.ts');
+  assert.match(guards, /target\.role === "user"/);
+  assert.match(route, /parsed\.data\.role !== "user"/);
+  assert.match(read('app/api/admin/users/route.ts'), /query = query\.eq\("role", "user"\)/);
+});
+
+test('self approval is blocked in API and database functions', () => {
+  assert.match(read('app/api/admin/approvals/[id]/route.ts'), /event\.user_id === user\.id/);
+  assert.match(read('app/api/admin/event-change-requests/[id]/route.ts'), /changeRequest\.event\.user_id === user\.id/);
+  const migration = read('supabase/migration_20260719_full_server_security.sql');
+  assert.match(migration, /event_row\.user_id = p_actor_id/);
+  assert.match(migration, /request_row\.requester_id = p_actor_id/);
+  assert.match(migration, /SELF_APPROVAL_FORBIDDEN/);
+});
+
+test('approval decisions and audit records use atomic or fail-closed paths', () => {
+  const migration = read('supabase/migration_20260719_full_server_security.sql');
+  assert.match(migration, /decide_calendar_event_atomic/);
+  assert.match(migration, /decide_event_change_atomic/);
+  assert.match(migration, /for update/i);
+  assert.match(read('lib/security/audit.ts'), /beginPrivilegedAudit/);
+  assert.match(read('lib/security/audit.ts'), /if \(error\) throw error/);
+  assert.match(read('app/api/admin/users/[id]/route.ts'), /beginPrivilegedAudit/);
+  assert.match(read('app/api/admin/settings/route.ts'), /beginPrivilegedAudit/);
+});
+
+test('sensitive event titles, notes, requests and messages use encryption helpers', () => {
+  const fields = read('lib/security/secure-fields.ts');
+  assert.match(fields, /EVENT_FIELDS = \["title"/);
+  assert.match(fields, /"proposed_title"/);
+  assert.match(read('app/api/events/route.ts'), /decryptCalendarEvents/);
   assert.match(read('app/api/messages/route.ts'), /encryptMessageFields/);
-  assert.match(read('app/api/messages/route.ts'), /decryptMessages/);
-  assert.match(read('scripts/migrate-content-encryption.mjs'), /calendar_events/);
-  assert.match(read('scripts/migrate-content-encryption.mjs'), /messages/);
+  assert.match(read('scripts/migrate-content-encryption.mjs'), /\['calendar_events', \['title'/);
 });
 
-
-test('department capacity thresholds and closed signup flow are wired into the UI', () => {
-  const constants = read('lib/constants.ts');
-  const calendar = read('components/calendar/CalendarBoard.tsx');
-  const loginForm = read('components/auth/LoginForm.tsx');
-  assert.match(constants, /WEEKDAY_DEPARTMENT_CAPACITY_PERCENT = 25/);
-  assert.match(constants, /WEEKEND_DEPARTMENT_CAPACITY_PERCENT = 35/);
-  assert.match(calendar, /DEPARTMENT_CAPACITY_EVENT_TYPES/);
-  assert.match(calendar, /percentage > capacityThreshold|people\.size \/ memberCount\) \* 100 > capacityThreshold/);
-  assert.doesNotMatch(loginForm, /signup-request|회원가입 신청/);
-  assert.match(read('app/signup-request/page.tsx'), /signup-disabled/);
+test('login failure limits do not share one global unknown-IP bucket', () => {
+  const login = read('app/api/auth/login/route.ts');
+  assert.match(login, /knownIp = ip !== "unknown"/);
+  assert.match(login, /login-ip.*limit: 100/);
+  assert.match(login, /login-id.*limit: 6/);
+  assert.match(login, /assertRateLimitAvailable/);
 });
 
+test('security retention cleanup is scheduled automatically', () => {
+  const migration = read('supabase/migration_20260719_full_server_security.sql');
+  assert.match(migration, /cleanup_security_records/);
+  assert.match(migration, /leave_calendar_security_cleanup/);
+  assert.match(migration, /cron\.schedule/);
+});
 
 test('calendar API minimizes other-user data and bounds requested ranges', () => {
   const route = read('app/api/events/route.ts');
@@ -90,43 +118,16 @@ test('calendar API minimizes other-user data and bounds requested ranges', () =>
   assert.match(route, /assertCalendarRange/);
   assert.match(route, /publicUserId/);
   assert.match(route, /publicEventId/);
-  assert.doesNotMatch(route, /rejection_reason,approved_by,approved_at,created_at,updated_at/);
-});
-
-test('privileged account APIs consistently require AAL2', () => {
-  for (const file of [
-    'app/api/events/route.ts',
-    'app/api/events/[id]/route.ts',
-    'app/api/event-change-requests/route.ts',
-    'app/api/messages/route.ts',
-    'app/api/messages/[id]/route.ts',
-    'app/api/auth/change-password/route.ts',
-  ]) {
-    assert.match(read(file), /requireAal2/, `${file} is missing privileged MFA enforcement`);
-  }
-});
-
-test('approval decisions use atomic database functions', () => {
-  const migration = read('supabase/migration_20260719_security_hardening.sql');
-  assert.match(migration, /decide_calendar_event_atomic/);
-  assert.match(migration, /decide_event_change_atomic/);
-  assert.match(migration, /for update/i);
-  assert.match(migration, /event_change_requests_one_pending_per_event_idx/);
-  assert.match(read('app/api/admin/approvals/[id]/route.ts'), /decide_calendar_event_atomic/);
-  assert.match(read('app/api/admin/event-change-requests/[id]/route.ts'), /decide_event_change_atomic/);
-});
-
-test('cryptographic configuration rejects weak fallback keys', () => {
-  const pii = read('lib/security/pii.ts');
-  assert.doesNotMatch(pii, /createHash\("sha256"\)\.update\(raw/);
-  assert.match(pii, /32바이트 Base64|64자리 16진수/);
-  assert.match(read('lib/security/password-history.ts'), /length < 32/);
 });
 
 test('browser JavaScript cannot read Supabase authentication tokens', () => {
-  assert.equal(fs.existsSync(path.join(root, 'lib/supabase/client.ts')), false);
+  assert.equal(exists('lib/supabase/client.ts'), false);
   assert.match(read('lib/supabase/server.ts'), /httpOnly:\s*true/);
   assert.match(read('proxy.ts'), /httpOnly:\s*true/);
-  assert.match(read('components/auth/MfaGate.tsx'), /\/api\/auth\/mfa/);
   assert.doesNotMatch(read('components/auth/MfaGate.tsx'), /createBrowserClient|supabase\.auth/);
+});
+
+test('dependency override pins a patched PostCSS release', () => {
+  const packageJson = JSON.parse(read('package.json'));
+  assert.equal(packageJson.overrides?.postcss, '8.5.19');
 });

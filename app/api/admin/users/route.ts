@@ -11,7 +11,7 @@ import { assertSameOrigin, clientIp } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
 import { encryptMessageFields } from "@/lib/security/secure-fields";
-import { writeAuditLog } from "@/lib/security/audit";
+import { beginPrivilegedAudit, completePrivilegedAudit, writeAuditLogBestEffort } from "@/lib/security/audit";
 import { verifyCurrentPassword } from "@/lib/security/reauth";
 
 function safeManagedProfile(profile: Profile) {
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
     let users: Profile[] = [];
     if (requestedDepartment) {
       let query = admin.from("profiles").select("*").eq("department", requestedDepartment).eq("account_status", "active");
-      if (profile.role === "department_admin") query = query.neq("role", "admin");
+      if (profile.role === "department_admin") query = query.eq("role", "user");
       const { data, error } = await query;
       if (error) throw error;
       users = decryptProfiles(data as Record<string, unknown>[]).map((item) => item as unknown as Profile)
@@ -82,6 +82,7 @@ const schema = z.object({
 export async function POST(request: Request) {
   let actorId: string | null = null;
   let targetId: string | null = null;
+  let privilegedAuditId: string | null = null;
   try {
     assertSameOrigin(request);
     const { user } = await requireAdmin();
@@ -98,6 +99,11 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
     const { data: duplicate } = await admin.from("profiles").select("id").eq("login_id_hash", loginIdHash(parsed.data.loginId)).maybeSingle();
     if (duplicate) throw new SecurityError("DUPLICATE_LOGIN", 409, "이미 사용 중인 아이디입니다.");
+
+    privilegedAuditId = await beginPrivilegedAudit({
+      request, action: "user.create", actorId: user.id,
+      metadata: { role: parsed.data.role, department: parsed.data.department },
+    });
 
     const { data, error } = await admin.auth.admin.createUser({
       email: loginIdToAuthEmail(parsed.data.loginId),
@@ -136,10 +142,13 @@ export async function POST(request: Request) {
       content: "계정이 생성되었습니다. 초기 비밀번호는 24시간 안에 로그인하여 변경해야 합니다.",
       message_type: "account_created",
     }));
-    await writeAuditLog({ request, action: "user.create", actorId: user.id, targetUserId: data.user.id, success: true, metadata: { role: parsed.data.role, department: parsed.data.department } });
+    await completePrivilegedAudit(privilegedAuditId, true, {
+      target_user_id: data.user.id, role: parsed.data.role, department: parsed.data.department,
+    });
     return Response.json({ ok: true });
   } catch (error) {
-    await writeAuditLog({ request, action: "user.create", actorId, targetUserId: targetId, success: false });
+    if (privilegedAuditId) await completePrivilegedAudit(privilegedAuditId, false, { target_user_id: targetId });
+    else await writeAuditLogBestEffort({ request, action: "user.create", actorId, targetUserId: targetId, success: false });
     return authErrorResponse(error);
   }
 }

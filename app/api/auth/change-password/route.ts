@@ -9,7 +9,7 @@ import { assertSameOrigin, clientIp } from "@/lib/security/request";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { SecurityError } from "@/lib/security/errors";
 import { startAppSession } from "@/lib/security/session";
-import { writeAuditLog } from "@/lib/security/audit";
+import { beginPrivilegedAudit, completePrivilegedAudit, writeAuditLogBestEffort } from "@/lib/security/audit";
 import { requireAal2 } from "@/lib/security/mfa";
 
 const schema = z.object({
@@ -19,6 +19,7 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   let actorId: string | null = null;
+  let privilegedAuditId: string | null = null;
   try {
     assertSameOrigin(request);
     const { supabase, user, profile } = await requireUser({ allowPasswordChangeRequired: true });
@@ -44,6 +45,9 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient();
     await ensurePasswordNotReused(admin, user.id, parsed.data.password);
+    privilegedAuditId = await beginPrivilegedAudit({
+      request, action: "auth.password_change", actorId: user.id, targetUserId: user.id,
+    });
     const historyRecordId = await insertPasswordRecord(admin, user.id, parsed.data.password);
     const nextVersion = (profile.session_version ?? 1) + 1;
 
@@ -79,10 +83,11 @@ export async function POST(request: Request) {
       throw updateError;
     }
 
-    await writeAuditLog({ request, action: "auth.password_change", actorId: user.id, targetUserId: user.id, success: true });
+    await completePrivilegedAudit(privilegedAuditId, true);
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store, max-age=0" } });
   } catch (error) {
-    await writeAuditLog({ request, action: "auth.password_change", actorId, targetUserId: actorId, success: false });
+    if (privilegedAuditId) await completePrivilegedAudit(privilegedAuditId, false);
+    else await writeAuditLogBestEffort({ request, action: "auth.password_change", actorId, targetUserId: actorId, success: false });
     return authErrorResponse(error);
   }
 }
